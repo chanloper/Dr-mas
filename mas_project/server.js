@@ -14,14 +14,20 @@ app.use(cors());
 app.use(express.json());
 
 // --- EJS 설정 ---
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'backend', 'public')));
 
-// --- 메인 페이지 (/) 접속 시 화면 그려주기 ---
+// --- 메인 페이지 (/) 접속 시 메인 랜딩 화면 그려주기 ---
 app.get('/', (req, res) => {
-    res.render('chat', { title: "Dr. MAS AI Assistant" });
+    res.render('main'); 
 });
 
+// --- 기존 채팅 화면은 /chat 경로로 분리 ---
+app.get('/chat', (req, res) => {
+    res.render('chat', { title: "MAS AI Assistant" });
+});
 
 // 하드코딩이 아닌 .env 파일 변수를 참조할 수 있도록 코드 수정
 const pool = mariadb.createPool({
