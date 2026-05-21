@@ -2,16 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const mariadb = require('mariadb');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const axios = require('axios');
-const path = require('path'); // EJS 경로 설정을 위한 모듈
 
-// 1. 여기서 app을 가장 먼저 탄생시켜야 합니다!
+const bcrypt = require('bcrypt'); // 암호 해싱
+const axios = require('axios');
+
+const path = require('path'); // EJS 경로 설정 모듈
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
 const app = express(); 
 
-// 🌟 2. app이 만들어진 이후에 각종 설정을 붙여줍니다.
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // --- EJS 설정 ---
 
@@ -27,6 +29,16 @@ app.get('/', (req, res) => {
 // --- 기존 채팅 화면은 /chat 경로로 분리 ---
 app.get('/chat', (req, res) => {
     res.render('chat', { title: "MAS AI Assistant" });
+});
+
+// --- 로그인 화면 ---
+app.get('/login', (req, res) => {
+    res.render('login');
+});
+
+// --- 회원가입 화면 ---
+app.get('/register', (req, res) => {
+    res.render('register');
 });
 
 // 하드코딩이 아닌 .env 파일 변수를 참조할 수 있도록 코드 수정
@@ -143,4 +155,82 @@ app.post('/api/chat', async (req, res) => {
 
 app.listen(3000, () => {
     console.log("🚀 Dr. MAS 서버가 3000번 포트에서 가동 중입니다!");
+});
+
+// ==========================================
+// [API] 회원가입 처리 (POST /api/register)
+// ==========================================
+
+app.post('/api/register', async (req, res) => {
+    const { username, loginId, password, age, gender } = req.body;
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+
+        // 1. 아이디 중복 체크
+        const rows = await conn.query("SELECT user_id FROM Users WHERE login_id = ?", [loginId]);
+        if (rows.length > 0) {
+            return res.status(400).send('<script>alert("이미 존재하는 아이디입니다."); history.back();</script>');
+        }
+
+        // 2. 비밀번호 암호화 (Salt 고정값 10회 적용)
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // 3. DB에 사용자 정보 저장
+        const parsedAge = age ? parseInt(age, 10) : null;
+        const selectedGender = gender === "" ? null : gender;
+
+        await conn.query(
+            "INSERT INTO Users (login_id, password, username, age, gender) VALUES (?, ?, ?, ?, ?)",
+            [loginId, hashedPassword, username, parsedAge, selectedGender]
+        );
+
+        // 4. 가입 완료 후 로그인 페이지로 이동
+        res.send('<script>alert("회원가입이 완료되었습니다."); location.href="/login";</script>');
+
+    } catch (err) {
+        console.error("회원가입 에러:", err);
+        res.status(500).send('<script>alert("서버 오류가 발생했습니다."); history.back();</script>');
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// ==========================================
+// [API] 로그인 처리 (POST /api/login)
+// ==========================================
+
+
+app.post('/api/login', async (req, res) => {
+    const { loginId, password } = req.body;
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+
+        // 1. 해당 아이디를 가진 유저가 있는지 확인
+        const rows = await conn.query("SELECT * FROM Users WHERE login_id = ?", [loginId]);
+        if (rows.length === 0) {
+            return res.status(400).send('<script>alert("아이디 또는 비밀번호가 일치하지 않습니다."); history.back();</script>');
+        }
+
+        const user = rows[0];
+
+        // 2. 입력된 비밀번호와 DB에 저장된 암호화된 비밀번호 비교
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).send('<script>alert("아이디 또는 비밀번호가 일치하지 않습니다."); history.back();</script>');
+        }
+
+        // 3. 로그인 성공 시 처리
+        // (현재는 세션/토큰이 없으므로 알림창 출력 후 채팅화면으로 이동시킵니다)
+        res.send(`<script>alert("${user.username}님 환영합니다!"); location.href="/chat";</script>`);
+
+    } catch (err) {
+        console.error("로그인 에러:", err);
+        res.status(500).send('<script>alert("서버 오류가 발생했습니다."); history.back();</script>');
+    } finally {
+        if (conn) conn.release();
+    }
 });

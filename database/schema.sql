@@ -24,7 +24,7 @@ CREATE TABLE `Users` (
   `password` VARCHAR(255) NOT NULL,
   `username` VARCHAR(30) NOT NULL,
   `age` INT DEFAULT NULL,
-  `gender ENUM('Male','Female','Other') DEFAULT NULL,
+  `gender` ENUM('Male','Female','Other') DEFAULT NULL,
   `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `login_id` (`login_id`)

@@ -82,3 +82,47 @@
         .btn-outline:hover {
             background-color: var(--light-blue);
         }
+
+/* 로그인/회원가입 폼 디자인 추가 */
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--primary-blue);
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+    box-sizing: border-box;
+    transition: border-color 0.3s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 5px rgba(0, 80, 136, 0.2);
+}
+
+.link-text {
+    display: block;
+    margin-top: 20px;
+    color: var(--text-gray);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.link-text:hover {
+    color: var(--primary-blue);
+    text-decoration: underline;
+}
