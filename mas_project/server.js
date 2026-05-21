@@ -21,12 +21,15 @@ app.set('views', path.join(__dirname, 'views'));
 app.get('/', (req, res) => {
     res.render('chat', { title: "Dr. MAS AI Assistant" });
 });
+
+
+// 하드코딩이 아닌 .env 파일 변수를 참조할 수 있도록 코드 수정
 const pool = mariadb.createPool({
-    host: '127.0.0.1', 
-    user: 'root',
-    password: 'root1234', // 학교용 비밀번호로 수정 필요 ('' 또는 '1234' 등)
-    database: 'dr_mas_db',
-    port: 3307,           // 🚨 여기에 학교 포트 번호를 입력하세요 (3307 또는 3305)
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    port: parseInt(process.env.PORT, 10), // .env의 PORT를 숫자로 변환
     connectionLimit: 5
 });
 
@@ -115,12 +118,13 @@ app.post('/api/chat', async (req, res) => {
             aiResult = { predictedDisease: "분석 지연", guide: "데이터를 정리하는 중입니다. 다시 한번 증상을 입력해주세요." };
         }
 
-        // --- 구역 4: DB 저장 및 응답 ---
+        // --- 구역 4: DB 저장 및 응답 --- 
+        // schema.sql에 정의된 구조에 맞게 코드 수정
         const conn = await pool.getConnection();
         await conn.query(
-            "INSERT INTO chat_history (user_id, symptom, disease, guide) VALUES (?, ?, ?, ?)",
-            [userId, symptomText, aiResult.predictedDisease, aiResult.guide]
-        );
+    "INSERT INTO symptom_logs (user_id, symptom_text, ai_predicted_disease, ai_guide) VALUES (?, ?, ?, ?)",
+    [userId, symptomText, aiResult.predictedDisease, aiResult.guide]
+);
         conn.release();
 
         res.json(aiResult);
