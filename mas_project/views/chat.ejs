@@ -27,7 +27,7 @@
         .input-area button { margin-left: 10px; padding: 10px 20px; background: #0056b3; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; }
         .loading { font-size: 0.9rem; color: #888; align-self: flex-start; margin: 10px 0 10px 10px; display: none; }
 
-        /* --- [2] 마이페이지 화면 스타일 (새로 추가) --- */
+        /* --- [2] 마이페이지 화면 스타일 --- */
         .mypage-wrap { padding: 20px; background: #fff; }
         .profile-card { text-align: center; padding: 20px 0; border-bottom: 1px solid #eee; }
         .profile-pic { width: 80px; height: 80px; background: #e9ecef; border-radius: 50%; display: inline-block; line-height: 80px; font-size: 2rem; margin-bottom: 10px; }
@@ -51,7 +51,7 @@
         <span>1인 가구를 위한 지능형 의료 비서</span>
     </div>
     
-    <div id="view-chat" class="tab-content">
+    <div id="view-chat" class="tab-content" style="display: none;">
         <div class="chat-window" id="chat-window">
             <div class="msg ai">
                 안녕하세요! Dr. MAS입니다. 😊<br>어디가 불편하신지 말씀해 주시면 든든한 동반자가 되어 드릴게요.
@@ -64,11 +64,11 @@
         </div>
     </div>
 
-    <div id="view-mypage" class="tab-content" style="display: none;">
+    <div id="view-mypage" class="tab-content">
         <div class="mypage-wrap">
             <div class="profile-card">
                 <div class="profile-pic">👤</div>
-                <h3>김테스트 님</h3>
+                <h3>회원님</h3>
                 <p style="color: #666; font-size: 0.9rem; margin-top: 5px;">1인 가구 케어 모드 활성화 중</p>
             </div>
             <ul class="menu-list">
@@ -82,22 +82,23 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-item active" id="nav-chat" onclick="switchTab('chat')">
+        <div class="nav-item" id="nav-chat" onclick="switchTab('chat')">
             <div class="nav-icon">💬</div>상담하기
         </div>
-        <div class="nav-item" id="nav-mypage" onclick="switchTab('mypage')">
+        <div class="nav-item active" id="nav-mypage" onclick="switchTab('mypage')">
             <div class="nav-icon">👤</div>마이페이지
         </div>
     </div>
 </div>
 
 <script>
-    // --- 화면 전환(탭) 기능 (유지) ---
+    // --- 화면 전환(탭) 기능 ---
     function switchTab(tabName) {
         document.getElementById('view-chat').style.display = 'none';
         document.getElementById('view-mypage').style.display = 'none';
         document.getElementById('nav-chat').classList.remove('active');
         document.getElementById('nav-mypage').classList.remove('active');
+        
         document.getElementById('view-' + tabName).style.display = 'flex';
         document.getElementById('nav-' + tabName).classList.add('active');
     }
@@ -121,12 +122,8 @@
 
             navigator.geolocation.getCurrentPosition(
                 (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                (err) => resolve({ lat: null, lng: null }), // 에러 시 바로 포기 (응답 속도 사수)
-                { 
-                    enableHighAccuracy: false, 
-                    timeout: 3000,           
-                    maximumAge: 600000        
-                }
+                (err) => resolve({ lat: null, lng: null }),
+                { enableHighAccuracy: false, timeout: 3000, maximumAge: 600000 }
             );
         });
     }
