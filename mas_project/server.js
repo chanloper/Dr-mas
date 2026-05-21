@@ -65,6 +65,8 @@ const pool = mariadb.createPool({
     connectionLimit: 5
 });
 
+// ===================================================================================
+
 // Gemini AI 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -165,9 +167,12 @@ app.listen(3000, () => {
     console.log("🚀 MAS 서버가 3000번 포트에서 가동 중입니다!");
 });
 
+// ===================================================================================
+
 // ==========================================
 // [API] 회원가입 처리 (POST /api/register)
 // ==========================================
+
 app.post('/api/register', async (req, res) => {
     const { username, loginId, password, age, gender } = req.body;
     let conn;
@@ -202,6 +207,7 @@ app.post('/api/register', async (req, res) => {
 // ==========================================
 // [API] 로그인 처리 (POST /api/login)
 // ==========================================
+
 app.post('/api/login', async (req, res) => {
     const { loginId, password } = req.body;
     let conn;
@@ -232,6 +238,38 @@ app.post('/api/login', async (req, res) => {
     } catch (err) {
         console.error("로그인 에러:", err);
         res.status(500).send('<script>alert("서버 오류가 발생했습니다."); history.back();</script>');
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// ==========================================
+// [API] 나의 의료 기록 조회 (GET /api/records)
+// ==========================================
+
+app.post('/api/records', async (req, res) => {
+    // 세션 체크: 로그인하지 않은 경우 차단
+    if (!req.session.user) {
+        return res.status(401).json({ error: "로그인이 필요합니다." });
+    }
+
+    const currentUserId = req.session.user.userId;
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+        
+        // 해당 유저의 증상 기록을 최신순(created_at DESC)으로 조회
+        const rows = await conn.query(
+            "SELECT id, symptom_text, ai_predicted_disease, ai_guide, DATE_FORMAT(created_at, '%Y-%m-%d %H:%M') as date FROM symptom_logs WHERE user_id = ? ORDER BY created_at DESC",
+            [currentUserId]
+        );
+
+        res.json(rows);
+
+    } catch (err) {
+        console.error("의료 기록 조회 에러:", err);
+        res.status(500).json({ error: "데이터베이스 조회 중 오류가 발생했습니다." });
     } finally {
         if (conn) conn.release();
     }

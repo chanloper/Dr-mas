@@ -7,13 +7,11 @@
         * { box-sizing: border-box; font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; }
         body { background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; height: 100vh; }
         
-        /* 앱 컨테이너 (하단 탭 공간 확보를 위해 position 설정) */
-        .app-container { width: 100%; max-width: 450px; background: white; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; position: relative; padding-bottom: 60px; /* 하단바 높이만큼 여백 */ }
+        .app-container { width: 100%; max-width: 450px; background: white; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; position: relative; padding-bottom: 60px; }
         
         .header { background: #0056b3; color: white; padding: 20px; text-align: center; font-size: 1.2rem; font-weight: bold; }
         .header span { font-size: 0.9rem; font-weight: normal; opacity: 0.8; display: block; margin-top: 5px; }
 
-        /* 탭 화면 공통 설정 */
         .tab-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; height: 100%; }
         
         /* --- [1] 채팅 화면 스타일 --- */
@@ -32,9 +30,17 @@
         .profile-card { text-align: center; padding: 20px 0; border-bottom: 1px solid #eee; }
         .profile-pic { width: 80px; height: 80px; background: #e9ecef; border-radius: 50%; display: inline-block; line-height: 80px; font-size: 2rem; margin-bottom: 10px; }
         .menu-list { list-style: none; margin-top: 20px; }
-        .menu-list li { padding: 15px 10px; border-bottom: 1px solid #f1f1f1; font-size: 1.05rem; cursor: pointer; color: #333; display: flex; justify-content: space-between; }
+        .menu-list li { padding: 15px 10px; border-bottom: 1px solid #f1f1f1; font-size: 1.05rem; cursor: pointer; color: #333; display: flex; justify-content: space-between; align-items: center; }
         .menu-list li:hover { background: #f8f9fa; }
-        .menu-list li::after { content: '>'; color: #ccc; }
+        .menu-list li::after { content: '>'; color: #ccc; font-weight: bold; }
+
+        /* 의료 기록 컨테이너 스타일 */
+        .records-container { display: none; padding: 15px; background: #f8fafc; border-radius: 10px; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; }
+        .record-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+        .record-item:last-child { border-bottom: none; }
+        .record-date { color: #888; font-size: 0.8rem; margin-bottom: 4px; }
+        .record-symptom { font-weight: bold; color: #333; }
+        .record-disease { color: #c62828; margin-top: 2px; }
 
         /* --- [3] 하단 네비게이션 바 스타일 --- */
         .bottom-nav { position: absolute; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; }
@@ -72,7 +78,10 @@
                 <p style="color: #666; font-size: 0.9rem; margin-top: 5px;">1인 가구 케어 모드 활성화 중</p>
             </div>
             <ul class="menu-list">
-                <li>나의 의료 기록 확인</li>
+                <li onclick="toggleMedicalRecords()">나의 의료 기록 확인</li>
+                <div id="records-box" class="records-container">
+                    <p id="records-empty" style="text-align:center; color:#888; font-size:0.9rem;">기록을 불러오는 중입니다...</p>
+                </div>
                 <li>자주 가는 병원/약국 관리</li>
                 <li>긴급 연락처 (보호자) 설정</li>
                 <li>건강 알림 설정</li>
@@ -92,7 +101,6 @@
 </div>
 
 <script>
-    // --- 화면 전환(탭) 기능 ---
     function switchTab(tabName) {
         document.getElementById('view-chat').style.display = 'none';
         document.getElementById('view-mypage').style.display = 'none';
@@ -101,6 +109,47 @@
         
         document.getElementById('view-' + tabName).style.display = 'flex';
         document.getElementById('nav-' + tabName).classList.add('active');
+    }
+
+    // --- 나의 의료 기록 조회 및 토글 기능 ---
+    async function toggleMedicalRecords() {
+        const recordsBox = document.getElementById('records-box');
+        
+        // 박스가 열려있으면 닫기
+        if (recordsBox.style.display === 'block') {
+            recordsBox.style.display = 'none';
+            return;
+        }
+
+        // 박스 열기 및 데이터 페칭
+        recordsBox.style.display = 'block';
+        
+        try {
+            const response = await fetch('/api/records', { method: 'POST' });
+            if (!response.ok) throw new Error("서버 에러");
+            
+            const data = await response.json();
+            recordsBox.innerHTML = ''; // 초기화
+
+            if (data.length === 0) {
+                recordsBox.innerHTML = '<p style="text-align:center; color:#888; font-size:0.9rem;">분석된 의료 기록이 없습니다.</p>';
+                return;
+            }
+
+            data.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'record-item';
+                itemDiv.innerHTML = `
+                    <div class="record-date">${item.date}</div>
+                    <div class="record-symptom">증상: ${item.symptom_text}</div>
+                    <div class="record-disease">진단: ${item.ai_predicted_disease}</div>
+                `;
+                recordsBox.appendChild(itemDiv);
+            });
+
+        } catch (error) {
+            recordsBox.innerHTML = '<p style="text-align:center; color:#c62828; font-size:0.9rem;">기록을 불러오지 못했습니다.</p>';
+        }
     }
 
     const chatWindow = document.getElementById('chat-window');
@@ -143,7 +192,6 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    userId: 1, 
                     symptomText: symptomText, 
                     userLat: userLoc.lat, 
                     userLng: userLoc.lng 
