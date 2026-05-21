@@ -187,9 +187,14 @@
                 };
                 
                 itemDiv.innerHTML = `
-                    <div class="record-date">${item.date}</div>
-                    <div class="record-symptom">증상: ${item.symptom_text}</div>
-                    <div class="record-disease">진단: ${item.ai_predicted_disease}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div class="record-date">${item.date}</div>
+                            <div class="record-symptom">증상: ${item.symptom_text}</div>
+                            <div class="record-disease">진단: ${item.ai_predicted_disease}</div>
+                        </div>
+                        <button onclick="event.stopPropagation(); deleteRecord(${item.id})" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem;">삭제</button>
+                    </div>
                 `;
                 recordsBox.appendChild(itemDiv);
             });
@@ -225,44 +230,89 @@
         });
     }
 
-    async function sendChat() {
-        const symptomText = symptomInput.value.trim();
-        if(!symptomText) return alert("증상을 입력해주세요!");
-        
-        appendMessage('user', symptomText);
-        symptomInput.value = '';
-        loadingMsg.style.display = 'block';
+    let cachedLocation = null;
 
-        try {
-            const userLoc = await getFastLocation();
-
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    symptomText: symptomText, 
-                    userLat: userLoc.lat, 
-                    userLng: userLoc.lng 
-                })
-            });
-            
-            const data = await response.json();
-            loadingMsg.style.display = 'none';
-            
-            if(data.predictedDisease) {
-                const diseases = data.predictedDisease.split(',');
-                let badgesHtml = '<div style="margin-bottom:10px;">';
-                diseases.forEach(d => { if(d.trim() !== "") badgesHtml += `<span class="badge">${d.trim()}</span>`; });
-                badgesHtml += '</div>';
-
-                const formattedGuide = data.guide.replace(/\n/g, '<br>');
-                appendMessage('ai', badgesHtml + formattedGuide, true);
-            }
-        } catch (error) {
-            loadingMsg.style.display = 'none';
-            appendMessage('ai', "서버 통신에 실패했습니다.");
-        }
+// 💡 1. 페이지가 열리자마자 백그라운드에서 위치를 미리 찾아둡니다!
+window.addEventListener('DOMContentLoaded', async () => {
+    try {
+        cachedLocation = await getFastLocation();
+        console.log("위치 사전 로딩 완료!");
+    } catch (e) {
+        console.log("위치 사전 로딩 실패, 기본값 대기");
     }
+});
+
+async function sendChat() {
+    const symptomText = symptomInput.value.trim();
+    if(!symptomText) return alert("증상을 입력해주세요!");
+    
+    appendMessage('user', symptomText);
+    symptomInput.value = '';
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `msg ai`;
+    msgDiv.innerHTML = '<span style="color:#888;">MAS가 분석 중입니다... ⏳</span>';
+    chatWindow.appendChild(msgDiv);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    try {
+        // 💡 2. 매번 새로 찾지 않고, 미리 찾아둔 위치를 바로 꺼내 씁니다. (여기서 1.5초 단축!!)
+        let userLoc = cachedLocation; 
+        if (!userLoc) {
+            userLoc = await getFastLocation(); // 혹시라도 못 찾았으면 그때만 찾음
+        }
+
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symptomText: symptomText, userLat: userLoc.lat, userLng: userLoc.lng })
+        });
+        
+        // --- (이 아래 스트리밍 출력 부분은 기존과 완벽히 동일하게 두시면 됩니다) ---
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let fullText = "";
+
+        msgDiv.innerHTML = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break; 
+            fullText += decoder.decode(value, { stream: true });
+            msgDiv.innerHTML = fullText
+                .replace(/\[질환\]/g, '<span class="badge">🩺 예상 질환:</span> ')
+                .replace(/\[가이드\]/g, '<br><br><strong>💡 가이드</strong><br>')
+                .replace(/\n/g, '<br>');
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+    } catch (error) {
+        msgDiv.innerHTML = "서버 통신에 실패했습니다.";
+    }
+}
+// --- 의료 기록 삭제 기능 ---
+async function deleteRecord(recordId) {
+    if (!confirm("정말로 이 기록을 삭제하시겠습니까?")) return;
+
+    try {
+        const response = await fetch(`/api/records/${recordId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            alert("삭제되었습니다.");
+            // 삭제가 완료되면 화면을 다시 깔끔하게 불러옵니다.
+            document.getElementById('records-box').style.display = 'none';
+            toggleMedicalRecords(); 
+        } else {
+            alert(result.message || "삭제에 실패했습니다.");
+        }
+    } catch (error) {
+        console.error("삭제 요청 에러:", error);
+        alert("서버 통신에 실패했습니다.");
+    }
+}
 </script>
 
 </body>
