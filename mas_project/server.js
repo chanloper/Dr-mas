@@ -194,11 +194,12 @@ app.post('/api/register', async (req, res) => {
             [loginId, hashedPassword, username, parsedAge, selectedGender]
         );
 
-        res.send('<script>alert("회원가입이 완료되었습니다."); location.href="/login";</script>');
+       res.status(200).json({ success: true, message: "회원가입이 완료되었습니다." });
 
     } catch (err) {
         console.error("회원가입 에러:", err);
-        res.status(500).send('<script>alert("서버 오류가 발생했습니다."); history.back();</script>');
+        // [수정] 에러 발생 시에도 스크립트 대신 에러 메시지(JSON)를 보냅니다.
+        res.status(500).json({ success: false, message: "서버 오류가 발생했습니다." });
     } finally {
         if (conn) conn.release();
     }

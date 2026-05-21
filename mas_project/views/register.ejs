@@ -6,6 +6,58 @@
     <title>MAS - 회원가입</title>
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <form id="registerForm">
+    <button type="submit" class="btn btn-primary">가입하기</button>
+</form>
+
+<script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault(); // 기본 폼 전송 막기
+
+        const formData = {
+            username: e.target.username.value,
+            loginId: e.target.loginId.value,
+            password: e.target.password.value,
+            age: e.target.age.value,
+            gender: e.target.gender.value
+        };
+
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        const result = await response.json(); // 서버에서 JSON 응답 받기
+        if (response.ok) {
+            alert(result.message);
+            location.href = '/login';
+        } else {
+            alert(result.message);
+        }
+    });
+    document.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault(); // 기본 폼 전송 방식 차단
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json(); // 서버에서 JSON 응답 받기
+        
+        if (result.success) {
+            alert(result.message);
+            location.href = '/login'; // 성공 시 로그인 페이지로 이동
+        } else {
+            alert("회원가입에 실패했습니다.");
+        }
+    });
+</script>
 </head>
 <body>
     <div class="main-container">
