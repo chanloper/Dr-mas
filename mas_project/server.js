@@ -3,7 +3,7 @@ const express = require('express');
 const mariadb = require('mariadb');
 const cors = require('cors');
 
-const bcrypt = require('bcrypt'); // 암호 해싱
+const bcrypt = require('bcrypt'); // 암호 해싱, 해당 module 추가 설치해주세요
 const axios = require('axios');
 
 const path = require('path'); // EJS 경로 설정 모듈
