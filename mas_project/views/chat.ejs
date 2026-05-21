@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Dr. MAS AI Assistant</title>
+    <title>MAS AI Assistant</title>
     <style>
         * { box-sizing: border-box; font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; }
         body { background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; height: 100vh; }
@@ -36,7 +36,8 @@
 
         /* 의료 기록 컨테이너 스타일 */
         .records-container { display: none; padding: 15px; background: #f8fafc; border-radius: 10px; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; }
-        .record-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+        .record-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; cursor: pointer; transition: background-color 0.2s; }
+        .record-item:hover { background-color: #e2e8f0; border-radius: 8px; padding-left: 10px; } /* 호버 시 클릭 유도 효과 */
         .record-item:last-child { border-bottom: none; }
         .record-date { color: #888; font-size: 0.8rem; margin-bottom: 4px; }
         .record-symptom { font-weight: bold; color: #333; }
@@ -47,23 +48,31 @@
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
         .nav-item.active { color: #0056b3; font-weight: bold; }
         .nav-icon { font-size: 1.3rem; margin-bottom: 2px; }
+
+        /* --- [4] 모달(팝업창) 스타일 --- */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 90%; max-width: 400px; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-height: 80vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
+        .modal-title { font-weight: bold; font-size: 1.1rem; color: #0056b3; }
+        .modal-close { background: none; border: none; font-size: 1.5rem; color: #888; cursor: pointer; }
+        .modal-body { overflow-y: auto; font-size: 0.95rem; line-height: 1.6; color: #333; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
     <div class="header">
-        🩺 Dr. MAS
+        🩺 MAS
         <span>1인 가구를 위한 지능형 의료 비서</span>
     </div>
     
     <div id="view-chat" class="tab-content" style="display: none;">
         <div class="chat-window" id="chat-window">
             <div class="msg ai">
-                안녕하세요! Dr. MAS입니다. 😊<br>어디가 불편하신지 말씀해 주시면 든든한 동반자가 되어 드릴게요.
+                안녕하세요! MAS입니다. 😊<br>어디가 불편하신지 말씀해 주시면 든든한 동반자가 되어 드릴게요.
             </div>
         </div>
-        <div class="loading" id="loading-msg">Dr. MAS가 의료 데이터를 정밀 분석 중입니다... ⏳</div>
+        <div class="loading" id="loading-msg">MAS가 의료 데이터를 정밀 분석 중입니다... ⏳</div>
         <div class="input-area">
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
             <button onclick="sendChat()">전송</button>
@@ -100,6 +109,17 @@
     </div>
 </div>
 
+<div id="record-modal" class="modal-overlay" onclick="closeModalOnBgClick(event)">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-title">상세 분석 가이드</span>
+            <button class="modal-close" onclick="closeRecordModal()">&times;</button>
+        </div>
+        <div id="modal-body" class="modal-body">
+            </div>
+    </div>
+</div>
+
 <script>
     function switchTab(tabName) {
         document.getElementById('view-chat').style.display = 'none';
@@ -111,17 +131,35 @@
         document.getElementById('nav-' + tabName).classList.add('active');
     }
 
+    // --- 모달 제어 함수 ---
+    function openRecordModal(guideText) {
+        const modal = document.getElementById('record-modal');
+        const modalBody = document.getElementById('modal-body');
+        // 줄바꿈 문자를 HTML <br> 태그로 변환하여 삽입
+        modalBody.innerHTML = guideText ? guideText.replace(/\n/g, '<br>') : "상세 가이드 기록이 없습니다.";
+        modal.style.display = 'flex';
+    }
+
+    function closeRecordModal() {
+        document.getElementById('record-modal').style.display = 'none';
+    }
+
+    // 모달창 바깥(어두운 배경)을 클릭해도 닫히도록 설정
+    function closeModalOnBgClick(event) {
+        if (event.target.id === 'record-modal') {
+            closeRecordModal();
+        }
+    }
+
     // --- 나의 의료 기록 조회 및 토글 기능 ---
     async function toggleMedicalRecords() {
         const recordsBox = document.getElementById('records-box');
         
-        // 박스가 열려있으면 닫기
         if (recordsBox.style.display === 'block') {
             recordsBox.style.display = 'none';
             return;
         }
 
-        // 박스 열기 및 데이터 페칭
         recordsBox.style.display = 'block';
         
         try {
@@ -129,7 +167,7 @@
             if (!response.ok) throw new Error("서버 에러");
             
             const data = await response.json();
-            recordsBox.innerHTML = ''; // 초기화
+            recordsBox.innerHTML = ''; 
 
             if (data.length === 0) {
                 recordsBox.innerHTML = '<p style="text-align:center; color:#888; font-size:0.9rem;">분석된 의료 기록이 없습니다.</p>';
@@ -139,6 +177,15 @@
             data.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'record-item';
+                
+                // 데이터 세트를 이용하여 안전하게 가이드 텍스트 저장
+                itemDiv.dataset.guide = item.ai_guide; 
+                
+                // 항목을 클릭하면 모달을 열어주는 이벤트 리스너 추가
+                itemDiv.onclick = function() {
+                    openRecordModal(this.dataset.guide);
+                };
+                
                 itemDiv.innerHTML = `
                     <div class="record-date">${item.date}</div>
                     <div class="record-symptom">증상: ${item.symptom_text}</div>
@@ -152,6 +199,7 @@
         }
     }
 
+    // --- 채팅 관련 함수들 ---
     const chatWindow = document.getElementById('chat-window');
     const symptomInput = document.getElementById('symptom');
     const loadingMsg = document.getElementById('loading-msg');
