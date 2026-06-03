@@ -43,10 +43,10 @@ app.get('/register', (req, res) => res.render('register'));
 
 // --- DB 커넥션 풀 설정 ---
 const pool = mariadb.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
+    host: process.env.DB_HOST || 'dr-mas-db',
+    user: process.env.DB_USER || 'root',
     password: process.env.DB_PASS,
-    //database: process.env.DB_NAME,
+    database: 'dr_mas_db', // 💡 이제 방이 무조건 존재하므로, 고정값으로 확실하게 주소를 지정해 줍니다!
     port: 3306,
     connectionLimit: 5
 });
