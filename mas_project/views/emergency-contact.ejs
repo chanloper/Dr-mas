@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>긴급 연락처 (보호자) 설정</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .header { background-color: #0056b3; color: white; padding: 20px; text-align: center; font-size: 18px; font-weight: bold; position: relative; }
+        .back-btn { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
+        .content { padding: 20px; flex: 1; }
+        .alert-box { background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-bottom: 25px; border-left: 5px solid #ffc107; }
+        .form-box { background: #f1f3f9; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 5px; }
+        input[type="text"], input[type="tel"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        .btn-register { width: 100%; background-color: #0056b3; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .section-title { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 12px; border-bottom: 2px solid #0056b3; padding-bottom: 5px; }
+        .contact-list { display: flex; flex-direction: column; gap: 10px; }
+        .contact-item { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .contact-info h4 { margin: 0 0 4px 0; color: #1e293b; font-size: 15px; }
+        .contact-info p { margin: 0; color: #64748b; font-size: 13px; }
+        .btn-delete { background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .empty-msg { text-align: center; color: #94a3b8; padding: 30px 0; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/chat" class="back-btn">◀</a>
+            긴급 연락처 (보호자) 설정
+        </div>
+        <div class="content">
+            <div class="alert-box">
+                🚨 <b>위급 상황 대비:</b> 이상 증세 감지 시 등록된 연락처로 메시지가 자동 발송됩니다.
+            </div>
+
+            <div class="form-box">
+                <div class="form-group">
+                    <label>보호자 이름 / 관계</label>
+                    <input type="text" id="nameInput" placeholder="예: 엄마, 홍길동(지인)">
+                </div>
+                <div class="form-group">
+                    <label>전화번호</label>
+                    <input type="tel" id="phoneInput" placeholder="예: 010-1234-5678">
+                </div>
+                <button class="btn-register" onclick="addContact()">보호자 등록</button>
+            </div>
+
+            <div class="section-title">👥 등록된 보호자 목록 (진짜 DB 연동)</div>
+            <div id="contactList" class="contact-list">
+                <% if (contacts && contacts.length > 0) { %>
+                    <% contacts.forEach(function(item) { %>
+                        <div class="contact-item" id="item-<%= item.id %>">
+                            <div class="contact-info">
+                                <h4><%= item.name %></h4>
+                                <p>📞 <%= item.phone %></p>
+                            </div>
+                            <button class="btn-delete" onclick="deleteContact('<%= item.id %>')">삭제</button>
+                        </div>
+                    <% }); %>
+                <% } %>
+            </div>
+            
+            <div id="emptyMsg" class="empty-msg" style="display: <%= (contacts && contacts.length > 0) ? 'none' : 'block' %>;">등록된 긴급 연락처가 없습니다.</div>
+        </div>
+    </div>
+
+    <script>
+        async function addContact() {
+            const name = document.getElementById('nameInput').value.trim();
+            const phone = document.getElementById('phoneInput').value.trim();
+            if (!name || !phone) return alert('모두 입력해 주세요!');
+
+            const res = await fetch('/api/emergency-contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, phone })
+            });
+            if (res.ok) {
+                alert('DB에 안전하게 등록되었습니다!');
+                location.reload(); // 등록 후 진짜 고공 통신을 위해 새로고침
+            }
+        }
+
+        async function deleteContact(id) {
+            if (!confirm('정말 삭제하시겠습니까?')) return;
+            const res = await fetch(`/api/emergency-contact/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                alert('삭제 완료!');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>

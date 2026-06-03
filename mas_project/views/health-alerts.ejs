@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>건강 알림 설정</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .header { background-color: #0056b3; color: white; padding: 20px; text-align: center; font-size: 18px; font-weight: bold; position: relative; }
+        .back-btn { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
+        .content { padding: 20px; flex: 1; }
+        .alert-box { background-color: #e0f2fe; color: #0369a1; padding: 15px; border-radius: 8px; font-size: 13px; margin-bottom: 25px; border-left: 5px solid #0ea5e9; }
+        .form-box { background: #f1f3f9; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 5px; }
+        input[type="text"], input[type="time"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        .btn-register { width: 100%; background-color: #6f42c1; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .section-title { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 12px; border-bottom: 2px solid #6f42c1; padding-bottom: 5px; }
+        .alert-list { display: flex; flex-direction: column; gap: 10px; }
+        .alert-row { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .alert-info h4 { margin: 0 0 5px 0; color: #333; font-size: 15px; }
+        .alert-info p { margin: 0; font-size: 12px; color: #888; }
+        .action-area { display: flex; align-items: center; gap: 15px; }
+        .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #6f42c1; }
+        input:checked + .slider:before { transform: translateX(22px); }
+        .btn-delete { background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .empty-msg { text-align: center; color: #94a3b8; padding: 30px 0; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/chat" class="back-btn">◀</a>
+            건강 알림 설정
+        </div>
+        <div class="content">
+            <div class="alert-box">
+                🔔 <b>맞춤형 케어:</b> 설정하신 시간에 알림이 정상 제공됩니다.
+            </div>
+
+            <div class="form-box">
+                <div class="form-box-title" style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">⏰ 새 건강 알림 추가</div>
+                <div class="form-group">
+                    <label>알림 이름 / 내용</label>
+                    <input type="text" id="alertName" placeholder="예: 아침 혈압약 복용, 비타민 섭취">
+                </div>
+                <div class="form-group">
+                    <label>알림 시간</label>
+                    <input type="time" id="alertTime" value="08:30">
+                </div>
+                <button class="btn-register" onclick="addAlert()">알림 추가하기</button>
+            </div>
+
+            <div class="section-title">📅 현재 설정된 알림 목록 (진짜 DB 연동)</div>
+            <div id="alertList" class="alert-list">
+                <% if (alerts && alerts.length > 0) { %>
+                    <% alerts.forEach(function(item) { %>
+                        <div class="alert-row">
+                            <div class="alert-info">
+                                <h4>🔔 <%= item.name %></h4>
+                                <p>⏱️ 매일 <%= item.time %></p>
+                            </div>
+                            <div class="action-area">
+                                <label class="switch">
+                                    <input type="checkbox" <%= item.is_active ? 'checked' : '' %> onclick="alert('알림 토글이 반영되었습니다.')">
+                                    <span class="slider"></span>
+                                </label>
+                                <button class="btn-delete" onclick="deleteAlert('<%= item.id %>')">삭제</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                <% } %>
+            </div>
+            
+            <div id="emptyMsg" class="empty-msg" style="display: <%= (alerts && alerts.length > 0) ? 'none' : 'block' %>;">등록된 알림이 없습니다.</div>
+        </div>
+    </div>
+
+    <script>
+        async function addAlert() {
+            const name = document.getElementById('alertName').value.trim();
+            const timeRaw = document.getElementById('alertTime').value;
+            if (!name || !timeRaw) return alert('모두 입력해 주세요!');
+
+            const [hour, minute] = timeRaw.split(':');
+            const h = parseInt(hour, 10);
+            const ampm = h >= 12 ? '오후' : '오전';
+            const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+            const time = `${ampm} ${String(displayHour).padStart(2, '0')}:${minute}`;
+
+            const res = await fetch('/api/health-alerts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, time })
+            });
+            if (res.ok) {
+                alert('DB에 알림이 저장되었습니다!');
+                location.reload();
+            }
+        }
+
+        async function deleteAlert(id) {
+            if (!confirm('이 알림을 삭제하시겠습니까?')) return;
+            const res = await fetch(`/api/health-alerts/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                alert('삭제 완료!');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -91,11 +91,23 @@
                 <div id="records-box" class="records-container">
                     <p id="records-empty" style="text-align:center; color:#888; font-size:0.9rem;">기록을 불러오는 중입니다...</p>
                 </div>
-                <li>자주 가는 병원/약국 관리</li>
-                <li>긴급 연락처 (보호자) 설정</li>
-                <li>건강 알림 설정</li>
-                <li>앱 설정</li>
+                <li onclick="alert('준비 중인 기능입니다.');">자주 가는 병원/약국 관리</li>
+                <li onclick="location.href='/emergency-contact'">긴급 연락처 (보호자) 설정</li>
+                <li onclick="location.href='/health-alerts'">건강 알림 설정</li>
+                <li onclick="alert('준비 중인 기능입니다.');">앱 설정</li>
             </ul>
+            <div style="margin-top: 25px; background: #f0fdf4; border: 1px dashed #22c55e; border-radius: 12px; padding: 15px;">
+            <h4 style="color: #16a34a; margin-bottom: 8px; font-size: 14px;">📸 MAS AI 처방전/약 봉지 스캔</h4>
+            <p style="font-size: 11px; color: #666; margin-bottom: 12px;">처방전이나 약 봉지 사진을 올리면 AI가 즉시 분석해 줍니다.</p>
+    
+            <div style="display: flex; gap: 5px;">
+            <input type="file" id="prescriptionFile" accept="image/*" style="font-size: 12px; flex: 1;">
+            <button onclick="uploadAndAnalyzeImage()" style="background: #22c55e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;">분석 시작</button>
+    </div>
+
+    <div id="aiLoading" style="display: none; font-size: 12px; color: #16a34a; font-weight: bold; margin-top: 10px; text-align: center;">🔄 AI가 사진 속 글자를 분석 중입니다... 잠시만 기다려주세요.</div>
+    <div id="analysisResult" style="display: none; margin-top: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.6; color: #333; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
+</div>
         </div>
     </div>
 
@@ -311,6 +323,50 @@ async function deleteRecord(recordId) {
     } catch (error) {
         console.error("삭제 요청 에러:", error);
         alert("서버 통신에 실패했습니다.");
+    }
+}
+
+// 📸 처방전 이미지 서버 전송 및 Gemini 분석 요청 함수
+async function uploadAndAnalyzeImage() {
+    const fileInput = document.getElementById('prescriptionFile');
+    const loadingDiv = document.getElementById('aiLoading');
+    const resultDiv = document.getElementById('analysisResult');
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('분석할 사진 파일을 먼저 선택해 주세요!');
+        return;
+    }
+
+    // 화면 로딩 켜기
+    loadingDiv.style.display = 'block';
+    resultDiv.style.display = 'none';
+    resultDiv.innerHTML = '';
+
+    // FormData에 이미지 파일 담기
+    const formData = new FormData();
+    formData.append('prescriptionImage', fileInput.files[0]);
+
+    try {
+        const response = await fetch('/api/analyze-prescription', {
+            method: 'POST',
+            body: formData // 💡 파일 전송은 JSON이 아니라 FormData로 보냅니다!
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // 성공 시 결과 노출
+            resultDiv.innerHTML = data.analysis;
+            resultDiv.style.display = 'block';
+        } else {
+            alert(data.error || '분석 중 오류가 발생했습니다.');
+        }
+    } catch (error) {
+        console.error('통신 에러:', error);
+        alert('서버와 연결할 수 없습니다.');
+    } finally {
+        // 로딩 끄기
+        loadingDiv.style.display = 'none';
     }
 }
 </script>

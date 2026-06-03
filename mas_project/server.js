@@ -3,7 +3,8 @@ const express = require('express');
 const session = require('express-session');
 const mariadb = require('mariadb');
 const cors = require('cors');
-
+const multer = require('multer'); // 💡 파일 업로드 부품 추가
+const upload = multer({ storage: multer.memoryStorage() }); // 메모리에 임시 저장
 const bcrypt = require('bcrypt'); // 암호 해싱
 const axios = require('axios');
 
@@ -46,7 +47,7 @@ const pool = mariadb.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASS,
     database: process.env.DB_NAME,
-    port: parseInt(process.env.PORT, 10),
+    port: 3306,
     connectionLimit: 5
 });
 
@@ -83,9 +84,9 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // AI 모델 설정 (프롬프트 다이어트: 시스템 지침으로 기본 역할 부여)
-        const model = genAI.getGenerativeModel({ 
+       const model = genAI.getGenerativeModel({ 
             model: "gemini-2.5-flash",
-            systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답하고, JSON 양식은 절대 사용하지 마."
+            systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답해. 단, [질환] 섹션에는 절대 길게 설명하지 말고 예상되는 질환명 단어만 1~3개 쉼표로 적어라."
         });
 
         // 얇아진 프롬프트 전송
@@ -114,8 +115,13 @@ app.post('/api/chat', async (req, res) => {
                 const diseaseMatch = aiFullText.match(/\[질환\](.*?)(?=\[가이드\]|$)/s);
                 const guideMatch = aiFullText.match(/\[가이드\](.*)/s);
                 
-                const dbDisease = diseaseMatch ? diseaseMatch[1].trim() : "분석 불가";
+                // 💡 const를 let으로 바꾸고, 50자가 넘으면 자르는 방어 코드를 추가했습니다!
+                let dbDisease = diseaseMatch ? diseaseMatch[1].trim() : "분석 불가";
                 const dbGuide = guideMatch ? guideMatch[1].trim() : aiFullText;
+
+                if (dbDisease.length > 50) {
+                    dbDisease = dbDisease.substring(0, 47) + "...";
+                }
 
                 conn = await pool.getConnection();
                 await conn.query(
@@ -242,4 +248,170 @@ app.delete('/api/records/:id', async (req, res) => {
         if (conn) conn.release();
     }
 });
-app.listen(3000, () => console.log("🚀 MAS 서버가 3000번 포트에서 가동 중입니다!"));
+// -----------------------------------------------------------------
+// =================================================================
+// [마이페이지 서브메뉴] 탭별 화면 렌더링 및 DB CRUD API (고도화 완료)
+// =================================================================
+
+// 1. 자주 가는 병원/약국 관리 (기존 유지)
+app.get('/manage-places', (req, res) => {
+    res.render('manage-places', { user: req.session.user || { username: "김실험" } });
+});
+
+// 2-A. [긴급 연락처] 화면 조회 (DB에서 해당 유저의 목록만 가져오기)
+app.get('/emergency-contact', async (req, res) => {
+    if (!req.session.user) return res.redirect('/login');
+    const currentUserId = req.session.user.userId;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const contacts = await conn.query("SELECT * FROM emergency_contacts WHERE user_id = ?", [currentUserId]);
+        res.render('emergency-contact', { user: req.session.user, contacts: contacts });
+    } catch (err) {
+        console.error("보호자 조회 에러:", err);
+        res.status(500).send("DB 조회 오류 발생");
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 2-B. [긴급 연락처] 신규 등록 API (DB 추가)
+app.post('/api/emergency-contact', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const currentUserId = req.session.user.userId;
+    const { name, phone } = req.body;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const result = await conn.query(
+            "INSERT INTO emergency_contacts (user_id, name, phone) VALUES (?, ?, ?)",
+            [currentUserId, name, phone]
+        );
+        res.json({ success: true, insertId: Number(result.insertId) });
+    } catch (err) {
+        res.status(500).json({ error: "DB 저장 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 2-C. [긴급 연락처] 삭제 API (DB 삭제)
+app.delete('/api/emergency-contact/:id', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const currentUserId = req.session.user.userId;
+    const contactId = req.params.id;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query("DELETE FROM emergency_contacts WHERE id = ? AND user_id = ?", [contactId, currentUserId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "DB 삭제 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 3-A. [건강 알림] 화면 조회 (DB에서 해당 유저의 알림 목록 가져오기)
+app.get('/health-alerts', async (req, res) => {
+    if (!req.session.user) return res.redirect('/login');
+    const currentUserId = req.session.user.userId;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const alerts = await conn.query("SELECT * FROM health_alerts WHERE user_id = ?", [currentUserId]);
+        res.render('health-alerts', { user: req.session.user, alerts: alerts });
+    } catch (err) {
+        res.status(500).send("DB 조회 오류 발생");
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 3-B. [건강 알림] 신규 등록 API (DB 추가)
+app.post('/api/health-alerts', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const currentUserId = req.session.user.userId;
+    const { name, time } = req.body;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const result = await conn.query(
+            "INSERT INTO health_alerts (user_id, name, time, is_active) VALUES (?, ?, ?, 0)",
+            [currentUserId, name, time]
+        );
+        res.json({ success: true, insertId: Number(result.insertId) });
+    } catch (err) {
+        res.status(500).json({ error: "DB 저장 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 3-C. [건강 알림] 삭제 API (DB 삭제)
+app.delete('/api/health-alerts/:id', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const currentUserId = req.session.user.userId;
+    const alertId = req.params.id;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query("DELETE FROM health_alerts WHERE id = ? AND user_id = ?", [alertId, currentUserId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "DB 삭제 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// ==========================================
+// [API] Gemini 처방전/약 봉지 스마트 사진 분석
+// ==========================================
+app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async (req, res) => {
+    // 로그인 체크
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    // 파일 업로드 체크
+    if (!req.file) return res.status(400).json({ error: "사진 파일이 업로드되지 않았습니다." });
+
+    try {
+        // 1. 이미지를 Gemini가 읽을 수 있는 base64 포맷으로 변환
+        const imagePart = {
+            inlineData: {
+                data: req.file.buffer.toString("base64"),
+                mimeType: req.file.mimetype
+            },
+        };
+
+        // 2. Gemini 1.5 Flash 모델 로드 (이미지 분석용 초고속 모델)
+        const aiModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        // 3. AI에게 내릴 정밀 명령문(프롬프트) 작성
+        const prompt = `
+        너는 지능형 의료 비서 MAS다. 제공된 처방전 또는 약 봉지 사진을 OCR 인식하여 다음 항목들을 분석해라.
+        환자가 노약자라고 가정하고, 전문 용어는 빼고 초등학생도 이해할 수 있게 아주 쉽고 친절한 한국어로 작성해줘.
+
+        [출력 양식]
+        📋 1. 인식된 약 이름 및 성분: (여기에 작성)
+        🎯 2. 주요 효능 및 효과: (여기에 작성)
+        ⏰ 3. 올바른 복용 방법 (언제 먹나요?): (여기에 작성)
+        ⚠️ 4. 절대 주의사항 및 부작용: (여기에 작성)
+
+        만약 업로드된 사진이 의료 관련 문서(처방전, 약전, 약 봉지)가 아니거나 글자를 전혀 알아볼 수 없다면, 
+        "⚠️ 처방전 또는 약 봉지 사진을 명확하게 다시 촬영해 주세요." 라고만 출력해라.
+        `;
+
+        // 4. Gemini에게 이미지와 프롬프트 전달 후 분석 요청
+        const result = await aiModel.generateContent([prompt, imagePart]);
+        const analysisText = result.response.text();
+
+        // 5. 프론트엔드로 분석 결과 전달
+        res.json({ success: true, analysis: analysisText });
+
+    } catch (err) {
+        console.error("Gemini 이미지 분석 에러:", err);
+        res.status(500).json({ error: "AI가 사진을 분석하는 중 오류가 발생했습니다." });
+    }
+});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 MAS 서버가 ${PORT}번 포트에서 가동 중입니다!`));
