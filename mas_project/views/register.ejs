@@ -6,66 +6,66 @@
     <title>MAS - 회원가입</title>
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <form id="registerForm">
-    <button type="submit" class="btn btn-primary">가입하기</button>
-</form>
-
-<script>
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-        e.preventDefault(); // 기본 폼 전송 막기
-
-        const formData = {
-            username: e.target.username.value,
-            loginId: e.target.loginId.value,
-            password: e.target.password.value,
-            age: e.target.age.value,
-            gender: e.target.gender.value
-        };
-
-        const response = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
-
-        const result = await response.json(); // 서버에서 JSON 응답 받기
-        if (response.ok) {
-            alert(result.message);
-            location.href = '/login';
-        } else {
-            alert(result.message);
+    <style>
+        /* ✨ 회원가입 성공 시 나타날 세련된 모달 팝업 디자인 */
+        .success-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 9999;
         }
-    });
-    document.querySelector('form').addEventListener('submit', async (e) => {
-        e.preventDefault(); // 기본 폼 전송 방식 차단
-
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-
-        const response = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.json(); // 서버에서 JSON 응답 받기
-        
-        if (result.success) {
-            alert(result.message);
-            location.href = '/login'; // 성공 시 로그인 페이지로 이동
-        } else {
-            alert("회원가입에 실패했습니다.");
+        .success-modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
         }
-    });
-</script>
+        .success-modal {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+            max-width: 350px;
+            width: 90%;
+        }
+        .success-modal-overlay.active .success-modal {
+            transform: scale(1);
+        }
+        .success-icon {
+            font-size: 50px;
+            color: #22c55e;
+            margin-bottom: 15px;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+        .success-modal h2 {
+            font-size: 20px; color: #1e293b; margin-bottom: 8px;
+        }
+        .success-modal p {
+            font-size: 14px; color: #64748b; margin-bottom: 20px;
+        }
+        .loading-bar {
+            width: 100%; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;
+        }
+        .loading-progress {
+            width: 0%; height: 100%; background: #0056b3; transition: width 1.5s linear;
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
         <i class="fa-solid fa-user-plus logo-icon"></i>
         <h1>회원가입</h1>
-        <p>맞춤형 의료 비서 서비스를 시작하세요.</p>
+        <p>MAS의 새로운 가족이 되어주세요.</p>
 
-        <form action="/api/register" method="POST">
+        <form id="registerForm">
             <div class="form-group">
                 <label for="username">이름</label>
                 <input type="text" id="username" name="username" class="form-control" required placeholder="실명을 입력하세요">
@@ -90,10 +90,72 @@
                     <option value="Female">여성</option>
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary" style="margin-top: 10px;">가입하기</button>
+            <button type="submit" class="btn btn-primary" style="margin-top: 15px;">가입하기</button>
         </form>
 
-        <a href="/login" class="link-text">이미 계정이 있으신가요? 로그인하기</a>
+        <a href="/login" class="link-text" style="margin-top: 15px; display: inline-block;">이미 계정이 있으신가요? 로그인</a>
     </div>
+
+    <div class="success-modal-overlay" id="successModal">
+        <div class="success-modal">
+            <i class="fa-solid fa-circle-check success-icon"></i>
+            <h2>회원가입 성공!</h2>
+            <p id="welcomeMessage">환영합니다! 잠시 후 로그인 페이지로 이동합니다.</p>
+            <div class="loading-bar">
+                <div class="loading-progress" id="progressBar"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 비동기(AJAX) 회원가입 요청 및 세련된 연출 로직
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); // 기본 페이지 튕김 현상 방지
+
+            const formData = {
+                username: e.target.username.value,
+                loginId: e.target.loginId.value,
+                password: e.target.password.value,
+                age: e.target.age.value,
+                gender: e.target.gender.value
+            };
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // 1. 웰컴 메시지 텍스트 커스텀 설정
+                    document.getElementById('welcomeMessage').innerText = `${formData.username}님 환영합니다! 잠시 후 로그인 화면으로 이동합니다.`;
+                    
+                    // 2. 예쁜 모달 팝업창 짜잔 띄우기
+                    const modal = document.getElementById('successModal');
+                    modal.classList.add('active');
+                    
+                    // 3. 하단 파란색 게이지 바가 스르륵 차오르는 시각 효과
+                    setTimeout(() => {
+                        document.getElementById('progressBar').style.width = '100%';
+                    }, 50);
+
+                    // 4. 1.5초 뒤에 로그인 화면으로 자동 순간이동!
+                    setTimeout(() => {
+                        location.href = '/login';
+                    }, 1600);
+                    
+                } else {
+                    // 실패했을 때는 에러 알림
+                    alert(result.message || '회원가입 도중 에러가 발생했습니다.');
+                }
+            } catch (error) {
+                console.error('통신 오류:', error);
+                alert('서버와 연결할 수 없습니다.');
+            }
+        });
+    </script>
 </body>
 </html>
