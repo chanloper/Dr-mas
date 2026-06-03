@@ -46,7 +46,7 @@ const pool = mariadb.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASS,
-    database: process.env.DB_NAME,
+    //database: process.env.DB_NAME,
     port: 3306,
     connectionLimit: 5
 });
@@ -416,14 +416,22 @@ app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async 
 const PORT = process.env.PORT || 3000;
 // ==========================================
 // 🛠️ [최종 완벽] 클라우드 DB 테이블 자동 생성 및 초기화 함수
-// ==========================================
+// =================================================================
 async function initCloudDatabase() {
     let conn;
     try {
+        // 특정 데이터베이스 지정 없이 순수하게 도어 오픈
         conn = await pool.getConnection();
-        console.log("⏳ [DB 초기화] 클라우드 마리아DB 테이블 확인 및 자동 생성을 시작합니다...");
+        console.log("⏳ [DB 마이그레이션] 클라우드 DB 대문 접속 성공! 'dr_mas_db' 생성 확인 중...");
+        
+        // 1. 'dr_mas_db' 방이 없으면 무조건 강제 새로 생성
+        await conn.query("CREATE DATABASE IF NOT EXISTS dr_mas_db");
+        
+        // 2. ⭐️ 중요: 이제부터 생성되는 테이블들은 모두 'dr_mas_db' 방 안에 넣겠다는 선언
+        await conn.query("USE dr_mas_db");
+        console.log("✅ [DB 마이그레이션] 'dr_mas_db' 데이터베이스 방 확보 및 진입 성공!");
 
-        // 1. 유저 테이블 생성
+        // 3. 유저 테이블 생성
         await conn.query(`
             CREATE TABLE IF NOT EXISTS Users (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -436,7 +444,7 @@ async function initCloudDatabase() {
             )
         `);
 
-        // 2. AI 진단 기록 테이블 생성
+        // 4. AI 진단 기록 테이블 생성
         await conn.query(`
             CREATE TABLE IF NOT EXISTS symptom_logs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -448,7 +456,7 @@ async function initCloudDatabase() {
             )
         `);
 
-        // 3. 긴급 연락처 테이블 생성
+        // 5. 긴급 연락처 테이블 생성
         await conn.query(`
             CREATE TABLE IF NOT EXISTS emergency_contacts (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -458,7 +466,7 @@ async function initCloudDatabase() {
             )
         `);
 
-        // 4. 건강 알림 설정 테이블 생성
+        // 6. 건강 알림 설정 테이블 생성
         await conn.query(`
             CREATE TABLE IF NOT EXISTS health_alerts (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -469,18 +477,17 @@ async function initCloudDatabase() {
             )
         `);
 
-        console.log("✅ [DB 초기화] 모든 테이블이 성공적으로 생성/확인되었습니다!");
+        console.log("🚀 [DB 마이그레이션] 모든 테이블 설계도면이 완벽하게 세팅되었습니다!");
+
     } catch (err) {
-        console.error("❌ [DB 초기화 에러] 테이블 생성 중 오류 발생:", err);
+        console.error("❌ [DB 마이그레이션 에러] 자동 생성 중 오류 발생:", err);
     } finally {
         if (conn) conn.release();
     }
 }
 
-// 🚀 서버 가동 및 DB 초기화 트리거
+// 🚀 서버 가동 트리거
 app.listen(3000, async () => {
     console.log("🚀 MAS 서버가 3000번 포트에서 가동 중입니다!");
-    
-    // 서버가 켜지자마자 클라우드 DB에 테이블들을 자동으로 심어줍니다.
     await initCloudDatabase(); 
 });
