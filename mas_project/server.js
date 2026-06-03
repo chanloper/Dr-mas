@@ -414,4 +414,73 @@ app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async 
     }
 });
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 MAS 서버가 ${PORT}번 포트에서 가동 중입니다!`));
+// ==========================================
+// 🛠️ [최종 완벽] 클라우드 DB 테이블 자동 생성 및 초기화 함수
+// ==========================================
+async function initCloudDatabase() {
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        console.log("⏳ [DB 초기화] 클라우드 마리아DB 테이블 확인 및 자동 생성을 시작합니다...");
+
+        // 1. 유저 테이블 생성
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS Users (
+                user_id INT AUTO_INCREMENT PRIMARY KEY,
+                login_id VARCHAR(50) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                username VARCHAR(100) NOT NULL,
+                age INT,
+                gender VARCHAR(10),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // 2. AI 진단 기록 테이블 생성
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS symptom_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                symptom_text TEXT NOT NULL,
+                ai_predicted_disease VARCHAR(255),
+                ai_guide TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // 3. 긴급 연락처 테이블 생성
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS emergency_contacts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                phone VARCHAR(50) NOT NULL
+            )
+        `);
+
+        // 4. 건강 알림 설정 테이블 생성
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS health_alerts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                time VARCHAR(50) NOT NULL,
+                is_active TINYINT(1) DEFAULT 0
+            )
+        `);
+
+        console.log("✅ [DB 초기화] 모든 테이블이 성공적으로 생성/확인되었습니다!");
+    } catch (err) {
+        console.error("❌ [DB 초기화 에러] 테이블 생성 중 오류 발생:", err);
+    } finally {
+        if (conn) conn.release();
+    }
+}
+
+// 🚀 서버 가동 및 DB 초기화 트리거
+app.listen(3000, async () => {
+    console.log("🚀 MAS 서버가 3000번 포트에서 가동 중입니다!");
+    
+    // 서버가 켜지자마자 클라우드 DB에 테이블들을 자동으로 심어줍니다.
+    await initCloudDatabase(); 
+});
