@@ -33,8 +33,9 @@
         .record-date { color: #888; font-size: 0.8rem; margin-bottom: 4px; }
         .record-symptom { font-weight: bold; color: #333; }
         .record-disease { color: #c62828; margin-top: 2px; }
-        .bottom-nav { position: absolute; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+
+        /* --- [3] 하단 네비게이션 바 스타일 --- */
+.bottom-nav { position: absolute; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; z-index: 999; }        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
         .nav-item.active { color: #0056b3; font-weight: bold; }
         .nav-icon { font-size: 1.3rem; margin-bottom: 2px; }
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
@@ -64,8 +65,11 @@
                 <i class="fa-solid fa-microphone"></i>
             </button>
 <<<<<<< HEAD
+<<<<<<< HEAD
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
             <button class="send-btn" onclick="sendChat()">전송</button>
+=======
+>>>>>>> 5ce0348c4eff8342844eedc0ee6a799f49ef3fbd
 =======
 >>>>>>> 5ce0348c4eff8342844eedc0ee6a799f49ef3fbd
         </div>
@@ -348,6 +352,77 @@
             else alert(result.message || "알림 전송에 실패했습니다.");
         } catch (error) { alert("서버 통신에 실패했습니다."); }
     }
+
+async function triggerSOS() {
+    if (!confirm("🚨 긴급 상황입니까? 등록된 보호자에게 SOS 알림을 전송합니다.")) return;
+
+    try {
+        const response = await fetch('/api/sos', { method: 'POST' });
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert("보호자에게 긴급 알림이 전송되었습니다.");
+        } else {
+            alert(result.message || "알림 전송에 실패했습니다.");
+        }
+    } catch (error) {
+        console.error("SOS 호출 에러:", error);
+        alert("서버 통신에 실패했습니다.");
+    }
+}
+// =================================================================
+// 🎙️ 음성 비서 모듈 (STT & TTS)
+// =================================================================
+let isVoiceMode = false; 
+let isRecording = false;
+let recognition;
+
+// 1. 음성 인식 (STT) 설정
+const SpeechApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechApi) {
+    recognition = new SpeechApi();
+    recognition.lang = 'ko-KR';
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+        isRecording = true;
+        document.getElementById('micBtn').innerText = '🛑';
+        // 💡 chatInput을 symptom으로 변경!
+        document.getElementById('symptom').placeholder = "듣고 있습니다... (종료하려면 🛑 클릭)";
+    };
+
+    recognition.onresult = (event) => {
+        // 💡 chatInput을 symptom으로 변경!
+        document.getElementById('symptom').value = event.results[0][0].transcript;
+        isVoiceMode = true; 
+        
+        sendChat();
+    };
+
+    recognition.onend = () => {
+        isRecording = false;
+        document.getElementById('micBtn').innerText = '🎤';
+        // 💡 chatInput을 symptom으로 변경!
+        document.getElementById('symptom').placeholder = "증상을 입력하세요 (예: 머리가 아파요)";
+    };
+    recognition.onerror = (event) => console.error("음성 인식 에러:", event.error);
+}
+
+// 2. 마이크 켜기/끄기 토글 함수
+function toggleSpeech() {
+    if (!recognition) return alert("음성 인식을 지원하지 않는 브라우저입니다.");
+    isRecording ? recognition.stop() : recognition.start();
+}
+
+// 3. AI 답변 읽어주기 (TTS) 함수
+function speakAIResponse(text) {
+    if (!window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[*#]/g, ''));
+    utterance.lang = 'ko-KR';
+    utterance.rate = 1.1; 
+    window.speechSynthesis.speak(utterance);
+}
+
 </script>
 </body>
 </html>
