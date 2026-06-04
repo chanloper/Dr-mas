@@ -76,9 +76,16 @@
         <div class="input-area">
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
             <button onclick="sendChat()">전송</button>
+<<<<<<< HEAD
             <button id="micBtn" type="button" onclick="startSpeechRecognition()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #10b981; margin-right: 10px;">
                 <i class="fa-solid fa-microphone"></i>
             </button>
+=======
+            <button id="micBtn" type="button" onclick="toggleSpeech()" style="background: none; border: none; font-size: 24px; cursor: pointer; margin-right: 10px;">
+            🎤
+            </button>
+</button>
+>>>>>>> 54376ce846d97003c381df23799f68245f0bfc83
         </div>
     </div>
 
@@ -258,8 +265,45 @@
         const symptomText = symptomInput.value.trim();
         if(!symptomText) return alert("증상을 입력해주세요!");
         
+<<<<<<< HEAD
         appendMessage('user', symptomText);
         symptomInput.value = '';
+=======
+        // --- (이 아래 스트리밍 출력 부분은 기존과 완벽히 동일하게 두시면 됩니다) ---
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let fullText = "";
+
+        msgDiv.innerHTML = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break; 
+            fullText += decoder.decode(value, { stream: true });
+            msgDiv.innerHTML = fullText
+                .replace(/\[질환\]/g, '<span class="badge">🩺 예상 질환:</span> ')
+                .replace(/\[가이드\]/g, '<br><br><strong>💡 가이드</strong><br>')
+                .replace(/\n/g, '<br>');
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+        if (isVoiceMode) { 
+            // aiMessage가 아니라 조각이 다 모인 'fullText'를 읽게 합니다!
+            speakAIResponse(fullText); 
+            isVoiceMode = false; 
+        }
+    } catch (error) {
+        msgDiv.innerHTML = "서버 통신에 실패했습니다.";
+    }
+}
+// --- 의료 기록 삭제 기능 ---
+async function deleteRecord(recordId) {
+    if (!confirm("정말로 이 기록을 삭제하시겠습니까?")) return;
+
+    try {
+        const response = await fetch(`/api/records/${recordId}`, {
+            method: 'DELETE'
+        });
+>>>>>>> 54376ce846d97003c381df23799f68245f0bfc83
         
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ai`;
@@ -341,6 +385,7 @@
             alert('분석할 사진 파일을 먼저 선택해 주세요!');
             return;
         }
+<<<<<<< HEAD
 
         loadingDiv.style.display = 'block';
         resultDiv.style.display = 'none';
@@ -450,6 +495,63 @@
 
         window.speechSynthesis.speak(utterance);
     }
+=======
+    } catch (error) {
+        console.error("SOS 호출 에러:", error);
+        alert("서버 통신에 실패했습니다.");
+    }
+}
+// =================================================================
+// 🎙️ 음성 비서 모듈 (STT & TTS)
+// =================================================================
+let isVoiceMode = false; 
+let isRecording = false;
+let recognition;
+
+// 1. 음성 인식 (STT) 설정
+const SpeechApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechApi) {
+    recognition = new SpeechApi();
+    recognition.lang = 'ko-KR';
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+        isRecording = true;
+        document.getElementById('micBtn').innerText = '🛑';
+        // 💡 chatInput을 symptom으로 변경!
+        document.getElementById('symptom').placeholder = "듣고 있습니다... (종료하려면 🛑 클릭)";
+    };
+
+    recognition.onresult = (event) => {
+        // 💡 chatInput을 symptom으로 변경!
+        document.getElementById('symptom').value = event.results[0][0].transcript;
+        isVoiceMode = true; 
+    };
+
+    recognition.onend = () => {
+        isRecording = false;
+        document.getElementById('micBtn').innerText = '🎤';
+        // 💡 chatInput을 symptom으로 변경!
+        document.getElementById('symptom').placeholder = "증상을 입력하세요 (예: 머리가 아파요)";
+    };
+    recognition.onerror = (event) => console.error("음성 인식 에러:", event.error);
+}
+
+// 2. 마이크 켜기/끄기 토글 함수
+function toggleSpeech() {
+    if (!recognition) return alert("음성 인식을 지원하지 않는 브라우저입니다.");
+    isRecording ? recognition.stop() : recognition.start();
+}
+
+// 3. AI 답변 읽어주기 (TTS) 함수
+function speakAIResponse(text) {
+    if (!window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[*#]/g, ''));
+    utterance.lang = 'ko-KR';
+    utterance.rate = 1.1; 
+    window.speechSynthesis.speak(utterance);
+}
+>>>>>>> 54376ce846d97003c381df23799f68245f0bfc83
 </script>
 
 </body>
