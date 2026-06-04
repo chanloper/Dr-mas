@@ -412,6 +412,71 @@ app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async 
         console.error("Gemini 이미지 분석 에러:", err);
         res.status(500).json({ error: "AI가 사진을 분석하는 중 오류가 발생했습니다." });
     }
+    // =================================================================
+// 1. [자주 가는 병원/약국 관리] DB CRUD API
+// =================================================================
+
+// 1-A. 화면 조회 (DB에서 데이터 가져오기)
+app.get('/manage-places', async (req, res) => {
+    if (!req.session.user) return res.redirect('/login');
+    const currentUserId = req.session.user.userId;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query("USE dr_mas_db"); // 방 이름 확실히 지정!
+        const places = await conn.query("SELECT * FROM favorite_places WHERE user_id = ?", [currentUserId]);
+        res.render('manage-places', { user: req.session.user, places: places });
+    } catch (err) {
+        console.error("병원/약국 조회 에러:", err);
+        res.status(500).send("DB 조회 오류 발생");
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 1-B. 신규 등록 API (DB에 추가) - 메모 기능 포함!
+app.post('/api/places', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const currentUserId = req.session.user.userId;
+    
+    // 💡 프론트엔드에서 memo 값도 같이 받아옵니다.
+    const { type, name, address, phone, memo } = req.body; 
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query("USE dr_mas_db");
+        
+        // 💡 INSERT 쿼리에 memo 칸도 추가해줍니다.
+        const result = await conn.query(
+            "INSERT INTO favorite_places (user_id, type, name, address, phone, memo) VALUES (?, ?, ?, ?, ?, ?)",
+            [currentUserId, type, name, address, phone, memo]
+        );
+        res.json({ success: true, insertId: Number(result.insertId) });
+    } catch (err) {
+        console.error("저장 에러:", err);
+        res.status(500).json({ error: "DB 저장 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});;
+
+// 1-C. 삭제 API (DB에서 삭제)
+app.delete('/api/places/:id', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const currentUserId = req.session.user.userId;
+    const placeId = req.params.id;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query("USE dr_mas_db");
+        await conn.query("DELETE FROM favorite_places WHERE id = ? AND user_id = ?", [placeId, currentUserId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "DB 삭제 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
 });
 const PORT = process.env.PORT || 3000;
 // ==========================================
@@ -476,6 +541,26 @@ async function initCloudDatabase() {
                 is_active TINYINT(1) DEFAULT 0
             )
         `);
+        // 7. 자주 가는 병원/약국 테이블 생성 (memo 컬럼 포함)
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS favorite_places (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                address VARCHAR(255),
+                phone VARCHAR(50),
+                memo TEXT
+            )
+        `);
+        
+        // 💡 [치트키] 만약 이미 방금 전 배포로 테이블이 만들어져 있다면, 
+        // 기존 테이블을 부수지 않고 memo 칸만 쏙 추가해주는 안전 장치입니다!
+        try {
+            await conn.query("ALTER TABLE favorite_places ADD COLUMN memo TEXT");
+        } catch(e) {
+            // 이미 memo 칸이 있으면 에러가 나지만 가볍게 무시하고 넘어갑니다.
+        }
 
         console.log("🚀 [DB 마이그레이션] 모든 테이블 설계도면이 완벽하게 세팅되었습니다!");
 
