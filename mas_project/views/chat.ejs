@@ -76,8 +76,9 @@
         <div class="input-area">
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
             <button onclick="sendChat()">전송</button>
-            <button id="micBtn" type="button" onclick="startSpeechRecognition()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #10b981; margin-right: 10px;">
-            <i class="fa-solid fa-microphone"></i>
+            <button id="micBtn" type="button" onclick="toggleSpeech()" style="background: none; border: none; font-size: 24px; cursor: pointer; margin-right: 10px;">
+            🎤
+            </button>
 </button>
         </div>
     </div>
