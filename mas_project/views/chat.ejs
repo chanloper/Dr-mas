@@ -76,6 +76,9 @@
         <div class="input-area">
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
             <button onclick="sendChat()">전송</button>
+            <button id="micBtn" type="button" onclick="startSpeechRecognition()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #10b981; margin-right: 10px;">
+            <i class="fa-solid fa-microphone"></i>
+</button>
         </div>
     </div>
 
@@ -97,6 +100,11 @@
                 <li onclick="location.href='/emergency-contact'">긴급 연락처 (보호자) 설정</li>
                 <li onclick="location.href='/health-alerts'">건강 알림 설정</li>
                 <li onclick="alert('준비 중인 기능입니다.');">앱 설정</li>
+                <li>
+                    <a href="/logout" class="menu-item" style="text-decoration: none; color: #ef4444; display: block; font-weight: bold;">
+                        🚪 로그아웃
+                    </a>
+                </li>
             </ul>
             <div style="margin-top: 25px; background: #f0fdf4; border: 1px dashed #22c55e; border-radius: 12px; padding: 15px;">
             <h4 style="color: #16a34a; margin-bottom: 8px; font-size: 14px;">📸 MAS AI 처방전/약 봉지 스캔</h4>
@@ -391,6 +399,80 @@ async function triggerSOS() {
         alert("서버 통신에 실패했습니다.");
     }
 }
+// =================================================================
+// 🎙️ 음성 인식 (STT) 및 음성 출력 (TTS) 모듈
+// =================================================================
+let isVoiceMode = false; // 마이크로 질문했는지 기억하는 변수
+
+// 1. 마이크 버튼 누를 때 실행되는 함수 (말하기 -> 글자 변환)
+function startSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("현재 브라우저는 음성 인식을 지원하지 않습니다. (크롬, 엣지 권장)");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ko-KR'; // 한국어 설정
+    recognition.interimResults = false;
+
+    const micBtn = document.getElementById('micBtn');
+
+    // 마이크 켜짐
+    recognition.onstart = function() {
+        micBtn.style.color = '#ef4444'; // 빨간색으로 변경 (녹음 중)
+        document.getElementById('chatInput').placeholder = "말씀해 주세요... 듣고 있습니다!"; 
+        // 💡 주의: 'chatInput' 부분은 조원님의 실제 input 태그 id에 맞게 수정하세요!
+    };
+
+    // 말하기 끝 -> 글자로 변환됨
+    recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('chatInput').value = transcript;
+        isVoiceMode = true; // "음성으로 질문했음" 표시
+        
+        // 변환된 텍스트를 바로 전송하는 함수 호출 (조원님의 전송 함수 이름으로 바꾸세요!)
+        // 예: sendMessage(); 
+    };
+
+    // 마이크 꺼짐
+    recognition.onspeechend = function() {
+        recognition.stop();
+        micBtn.style.color = '#10b981'; // 원래 초록색으로 복구
+        document.getElementById('chatInput').placeholder = "메시지를 입력하세요...";
+    };
+
+    recognition.onerror = function(event) {
+        console.error("음성 인식 에러:", event.error);
+        micBtn.style.color = '#10b981';
+    };
+
+    recognition.start();
+}
+
+// 2. AI의 답변을 사람 목소리로 읽어주는 함수 (글자 -> 말하기)
+function speakAIResponse(text) {
+    if (!window.speechSynthesis) return;
+
+    // AI 특유의 특수문자(*, #)를 제거해서 깔끔하게 읽도록 정제
+    const cleanText = text.replace(/[*#]/g, ''); 
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'ko-KR'; // 한국어
+    utterance.rate = 1.1;     // 읽는 속도 (1.0이 기본, 1.1은 살짝 빠릿하게)
+    utterance.pitch = 1.0;    // 목소리 톤
+
+    window.speechSynthesis.speak(utterance);
+} // 기존에 작성되어 있던 답변 받는 코드 안쪽 어딘가...
+const aiMessage = data.reply;
+appendMessage("AI", aiMessage); // 화면에 글자로 띄움
+
+// 👇 여기에 딱 4줄만 추가해 주세요! 👇
+if (isVoiceMode) { // 마이크로 질문했을 때만!
+    speakAIResponse(aiMessage); // AI 답변을 음성으로 읽어줍니다 🔊
+    isVoiceMode = false; // 초기화
+}
+
 </script>
 
 </body>
