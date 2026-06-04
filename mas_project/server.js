@@ -48,7 +48,8 @@ const pool = mariadb.createPool({
     password: process.env.DB_PASS,
     database: 'dr_mas_db', // 💡 이제 방이 무조건 존재하므로, 고정값으로 확실하게 주소를 지정해 줍니다!
     port: 3306,
-    connectionLimit: 5
+    connectionLimit: 5,
+    allowPublicKeyRetrieval: true
 });
 
 // Gemini AI 초기화
@@ -463,14 +464,17 @@ app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async 
         const result = await aiModel.generateContent([prompt, imagePart]);
         const analysisText = result.response.text();
 
-        // 5. 프론트엔드로 분석 결과 전달
+       // 5. 프론트엔드로 분석 결과 전달
         res.json({ success: true, analysis: analysisText });
 
     } catch (err) {
         console.error("Gemini 이미지 분석 에러:", err);
         res.status(500).json({ error: "AI가 사진을 분석하는 중 오류가 발생했습니다." });
     }
-    // =================================================================
+}); 
+// 💡 수정: 처방전 분석 API를 여기서 확실히 닫아줍니다!
+
+// =================================================================
 // 1. [자주 가는 병원/약국 관리] DB CRUD API
 // =================================================================
 
@@ -535,7 +539,7 @@ app.delete('/api/places/:id', async (req, res) => {
         if (conn) conn.release();
     }
 });
-});
+
 const PORT = process.env.PORT || 3000;
 // ==========================================
 // 🛠️ [최종 완벽] 클라우드 DB 테이블 자동 생성 및 초기화 함수

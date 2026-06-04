@@ -48,9 +48,10 @@
                 <button class="btn-register" onclick="addContact()">보호자 등록</button>
             </div>
 
-            <div class="section-title">👥 등록된 보호자 목록 (진짜 DB 연동)</div>
+            <div class="section-title">👥 등록된 보호자 목록</div>
             <div id="contactList" class="contact-list">
-                <% if (contacts && contacts.length > 0) { %>
+                <!-- 첫 번째 오탈자(에러) 수정됨 -->
+                <% if (typeof contacts !== 'undefined' && contacts.length > 0) { %>
                     <% contacts.forEach(function(item) { %>
                         <div class="contact-item" id="item-<%= item.id %>">
                             <div class="contact-info">
@@ -63,7 +64,8 @@
                 <% } %>
             </div>
             
-            <div id="emptyMsg" class="empty-msg" style="display: <%= (contacts && contacts.length > 0) ? 'none' : 'block' %>;">등록된 긴급 연락처가 없습니다.</div>
+            <!-- 두 번째 오탈자(에러) 수정됨 -->
+            <div id="emptyMsg" class="empty-msg" style="display: <%= (typeof contacts !== 'undefined' && contacts.length > 0) ? 'none' : 'block' %>;">등록된 긴급 연락처가 없습니다.</div>
         </div>
     </div>
 
@@ -80,7 +82,7 @@
             });
             if (res.ok) {
                 alert('DB에 안전하게 등록되었습니다!');
-                location.reload(); // 등록 후 진짜 고공 통신을 위해 새로고침
+                location.reload(); // 등록 후 서버 연동을 위해 새로고침 (주석 오탈자 수정)
             }
         }
 
