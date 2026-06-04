@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>자주 가는 병원/약국 관리</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=4dd3bc8ad3457af4cae3468d504d62e7&libraries=services"></script>
+    
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
@@ -14,27 +16,31 @@
         .form-box { background: #f1f5f9; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 5px; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        
-        /* 💡 추가된 메모 칸 스타일 */
-        textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; resize: none; height: 60px; font-family: inherit; }
-        
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        textarea { resize: none; height: 60px; font-family: inherit; }
         .btn-register { width: 100%; background-color: #10b981; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-register:hover { background-color: #059669; }
+        
         .section-title { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 12px; border-bottom: 2px solid #10b981; padding-bottom: 5px; }
         .place-list { display: flex; flex-direction: column; gap: 10px; }
         .place-item { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; position: relative; display: flex; align-items: flex-start; gap: 15px; flex-wrap: wrap; }
         .place-icon { font-size: 24px; color: #10b981; margin-top: 3px; }
         .place-info { flex: 1; min-width: 200px; }
         .place-info h4 { margin: 0 0 5px 0; color: #1e293b; font-size: 16px; }
-        .place-info p { margin: 3px 0; color: #64748b; font-size: 13px; }
-        .place-info i { width: 15px; text-align: center; margin-right: 5px; color: #94a3b8; }
+        .place-info p { margin: 3px 0; color: #64748b; font-size: 13px; display: flex; align-items: center; gap: 5px; }
         
-        /* 💡 등록된 메모를 보여주는 박스 스타일 */
         .memo-box { width: 100%; background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; border-radius: 4px; font-size: 13px; color: #92400e; margin-top: 5px; }
-        
         .btn-delete { background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; position: absolute; top: 15px; right: 15px; }
-        .empty-msg { text-align: center; color: #94a3b8; padding: 30px 0; font-size: 14px; }
+        
+        /* 💡 카카오맵 모달 창 스타일 */
+        .map-btn { background-color: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: 5px; }
+        .map-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .map-modal { background: white; width: 90%; max-width: 400px; border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .map-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .map-modal-header h3 { margin: 0; font-size: 16px; color: #1e293b; }
+        .close-map-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; }
+        #kakaoMap { width: 100%; height: 300px; border-radius: 8px; background-color: #e2e8f0; }
+        
         .hidden { display: none !important; }
     </style>
 </head>
@@ -59,7 +65,7 @@
                 </div>
                 <div class="form-group">
                     <label>주소 (선택)</label>
-                    <input type="text" id="placeAddress" placeholder="예: 서울시 강남구 역삼동 123">
+                    <input type="text" id="placeAddress" placeholder="예: 서울시 강남구 역삼동 123 (도로명/지번 모두 가능)">
                 </div>
                 <div class="form-group">
                     <label>전화번호 (선택)</label>
@@ -83,7 +89,12 @@
                             </div>
                             <div class="place-info">
                                 <h4><%= item.name %></h4>
-                                <% if(item.address) { %><p><i class="fa-solid fa-location-dot"></i> <%= item.address %></p><% } %>
+                                <% if(item.address) { %>
+                                    <p>
+                                        <i class="fa-solid fa-location-dot"></i> <%= item.address %>
+                                        <button class="map-btn" onclick="openMap('<%= item.address %>', '<%= item.name %>')">지도로 보기</button>
+                                    </p>
+                                <% } %>
                                 <% if(item.phone) { %><p><i class="fa-solid fa-phone"></i> <%= item.phone %></p><% } %>
                             </div>
                             <% if(item.memo) { %>
@@ -103,20 +114,30 @@
         </div>
     </div>
 
+    <div id="mapModal" class="map-modal-overlay hidden">
+        <div class="map-modal">
+            <div class="map-modal-header">
+                <h3 id="mapModalTitle">장소 위치</h3>
+                <button class="close-map-btn" onclick="closeMap()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="kakaoMap"></div>
+        </div>
+    </div>
+
     <script>
+        // --- 장소 추가 / 삭제 로직 ---
         async function addPlace() {
             const type = document.getElementById('placeType').value;
             const name = document.getElementById('placeName').value.trim();
             const address = document.getElementById('placeAddress').value.trim();
             const phone = document.getElementById('placePhone').value.trim();
-            const memo = document.getElementById('placeMemo').value.trim(); // 💡 메모 데이터 가져오기
+            const memo = document.getElementById('placeMemo').value.trim();
 
             if (!name) return alert('상호명은 필수 입력입니다!');
 
             const res = await fetch('/api/places', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // 💡 서버로 보낼 때 memo 데이터도 같이 포장해서 보냅니다.
                 body: JSON.stringify({ type, name, address, phone, memo })
             });
 
@@ -130,13 +151,63 @@
 
         async function deletePlace(id) {
             if (!confirm('정말 삭제하시겠습니까?')) return;
-            
             const res = await fetch(`/api/places/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                location.reload();
-            } else {
-                alert('삭제에 실패했습니다.');
-            }
+            if (res.ok) location.reload();
+            else alert('삭제에 실패했습니다.');
+        }
+
+        // --- 🗺️ 카카오맵 연동 로직 ---
+        function openMap(address, name) {
+            const mapModal = document.getElementById('mapModal');
+            mapModal.classList.remove('hidden');
+            document.getElementById('mapModalTitle').innerText = name;
+
+            const mapContainer = document.getElementById('kakaoMap'); 
+            
+            // 1. 초기 지도 생성 (기본 좌표 세팅)
+            const mapOption = {
+                center: new kakao.maps.LatLng(33.450701, 126.570667), // 임시 좌표
+                level: 3 // 확대 레벨
+            };  
+            const map = new kakao.maps.Map(mapContainer, mapOption); 
+
+            // 2. 주소-좌표 변환 객체 생성
+            const geocoder = new kakao.maps.services.Geocoder();
+
+            // 3. 주소로 좌표를 검색합니다
+            geocoder.addressSearch(address, function(result, status) {
+                // 정상적으로 검색이 완료됐으면 
+                if (status === kakao.maps.services.Status.OK) {
+                    const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
+
+                    // 결과값으로 받은 위치를 마커로 표시합니다
+                    const marker = new kakao.maps.Marker({
+                        map: map,
+                        position: coords
+                    });
+
+                    // 인포윈도우로 장소에 대한 설명을 표시합니다
+                    const infowindow = new kakao.maps.InfoWindow({
+                        content: `<div style="width:150px;text-align:center;padding:6px 0;font-size:12px;">${name}</div>`
+                    });
+                    infowindow.open(map, marker);
+
+                    // 지도의 중심을 결과값으로 받은 위치로 이동시킵니다
+                    map.setCenter(coords);
+                    
+                    // 모달 창 내에서 지도가 깨지지 않도록 레이아웃 재배치
+                    setTimeout(() => map.relayout(), 100);
+                    setTimeout(() => map.setCenter(coords), 150);
+                } else {
+                    alert('정확한 주소를 찾을 수 없습니다. 주소를 다시 확인해주세요.');
+                    closeMap();
+                }
+            });    
+        }
+
+        function closeMap() {
+            document.getElementById('mapModal').classList.add('hidden');
+            document.getElementById('kakaoMap').innerHTML = ''; // 지도 초기화
         }
     </script>
 </body>
