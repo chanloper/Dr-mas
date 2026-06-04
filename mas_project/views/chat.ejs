@@ -97,6 +97,11 @@
                 <li onclick="location.href='/emergency-contact'">긴급 연락처 (보호자) 설정</li>
                 <li onclick="location.href='/health-alerts'">건강 알림 설정</li>
                 <li onclick="alert('준비 중인 기능입니다.');">앱 설정</li>
+                <li>
+                    <a href="/logout" class="menu-item" style="text-decoration: none; color: #ef4444; display: block; font-weight: bold;">
+                        🚪 로그아웃
+                    </a>
+                </li>
             </ul>
             <div style="margin-top: 25px; background: #f0fdf4; border: 1px dashed #22c55e; border-radius: 12px; padding: 15px;">
             <h4 style="color: #16a34a; margin-bottom: 8px; font-size: 14px;">📸 MAS AI 처방전/약 봉지 스캔</h4>
@@ -391,6 +396,7 @@ async function triggerSOS() {
         alert("서버 통신에 실패했습니다.");
     }
 }
+
 </script>
 
 </body>
