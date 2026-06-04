@@ -73,7 +73,7 @@ app.post('/api/chat', async (req, res) => {
         // 카카오 API 동시 호출 (속도 2배 향상)
         if (userLat && userLng) {
             try {
-                const KAKAO_KEY = process.env.KAKAO_REST_API_KEY; 
+                const KAKAO_KEY = process.env.KAKAO_REST_API_KEY;
                 const [hospRes, pharmRes] = await Promise.all([
                     axios.get(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&y=${userLat}&x=${userLng}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` } }),
                     axios.get(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=PM9&y=${userLat}&x=${userLng}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` } })
@@ -84,7 +84,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // AI 모델 설정 (프롬프트 다이어트: 시스템 지침으로 기본 역할 부여)
-       const model = genAI.getGenerativeModel({ 
+        const model = genAI.getGenerativeModel({
             model: "gemini-2.5-flash",
             systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답해. 단, [질환] 섹션에는 절대 길게 설명하지 말고 예상되는 질환명 단어만 1~3개 쉼표로 적어라."
         });
@@ -104,7 +104,7 @@ app.post('/api/chat', async (req, res) => {
         for await (const chunk of resultStream.stream) {
             const chunkText = chunk.text();
             aiFullText += chunkText;
-            res.write(chunkText); 
+            res.write(chunkText);
         }
         res.end();
 
@@ -135,10 +135,12 @@ app.post('/api/chat', async (req, res) => {
             }
         })();
 
-    } catch (err) {
-        console.error(err);
-        res.write("\n\n서버 통신 중 에러가 발생했습니다.");
-        res.end();
+    } catch (error) {
+        if (error.status === 429) {
+            res.send("봇: 현재 사용자가 많아 AI가 숨을 고르고 있습니다. 1분 뒤에 다시 질문해 주세요! 😅");
+        } else {
+            res.send("봇: 에러가 발생했습니다.");
+        }
     }
 });
 
@@ -321,6 +323,48 @@ app.delete('/api/emergency-contact/:id', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: "DB 삭제 실패" });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// 👇👇👇 여기에 2번 SOS 호출 API 코드를 추가해 주세요! 👇👇👇
+
+// ==========================================
+// [API] 긴급 SOS 호출 처리 (POST /api/sos)
+// ==========================================
+app.post('/api/sos', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    
+    const currentUserId = req.session.user.userId;
+    const username = req.session.user.username;
+    let conn;
+
+    try {
+        conn = await pool.getConnection();
+        
+        // 1. 등록된 긴급 연락처 조회
+        const contacts = await conn.query(
+            "SELECT name, phone FROM emergency_contacts WHERE user_id = ?", 
+            [currentUserId]
+        );
+
+        if (contacts.length === 0) {
+            return res.status(400).json({ success: false, message: "등록된 보호자 연락처가 없습니다. 마이페이지에서 먼저 등록해주세요." });
+        }
+
+        // 2. 실제 문자 발송 로직 (여기에 외부 SMS API 연동 필요)
+        const phoneNumbers = contacts.map(c => c.phone);
+        const sosMessage = `[MAS 긴급 알림] ${username}님에게 위급 상황이 발생했습니다. 즉시 연락을 취해주세요!`;
+        
+        // TODO: Solapi, CoolSMS, Twilio 등의 API를 사용해 phoneNumbers 배열로 문자(SMS) 전송
+        console.log(`🚨 [SOS 발송 시뮬레이션] 수신자: ${phoneNumbers.join(', ')} / 메시지: ${sosMessage}`);
+
+        res.json({ success: true, message: "SOS 전송 성공" });
+
+    } catch (err) {
+        console.error("SOS 호출 에러:", err);
+        res.status(500).json({ success: false, message: "서버 오류가 발생했습니다." });
     } finally {
         if (conn) conn.release();
     }

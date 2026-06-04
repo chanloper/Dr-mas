@@ -114,13 +114,16 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-item" id="nav-chat" onclick="switchTab('chat')">
-            <div class="nav-icon">💬</div>상담하기
-        </div>
-        <div class="nav-item active" id="nav-mypage" onclick="switchTab('mypage')">
-            <div class="nav-icon">👤</div>마이페이지
-        </div>
+    <div class="nav-item active" id="nav-chat" onclick="switchTab('chat')">
+        <div class="nav-icon">💬</div>상담하기
     </div>
+    <div class="nav-item" style="color: #ef4444;" onclick="triggerSOS()">
+        <div class="nav-icon">🚨</div>SOS 호출
+    </div>
+    <div class="nav-item" id="nav-mypage" onclick="switchTab('mypage')">
+        <div class="nav-icon">👤</div>마이페이지
+    </div>
+</div>
 </div>
 
 <div id="record-modal" class="modal-overlay" onclick="closeModalOnBgClick(event)">
@@ -369,6 +372,23 @@ async function uploadAndAnalyzeImage() {
     } finally {
         // 로딩 끄기
         loadingDiv.style.display = 'none';
+    }
+}
+async function triggerSOS() {
+    if (!confirm("🚨 긴급 상황입니까? 등록된 보호자에게 SOS 알림을 전송합니다.")) return;
+
+    try {
+        const response = await fetch('/api/sos', { method: 'POST' });
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert("보호자에게 긴급 알림이 전송되었습니다.");
+        } else {
+            alert(result.message || "알림 전송에 실패했습니다.");
+        }
+    } catch (error) {
+        console.error("SOS 호출 에러:", error);
+        alert("서버 통신에 실패했습니다.");
     }
 }
 </script>
