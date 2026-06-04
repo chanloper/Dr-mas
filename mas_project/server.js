@@ -254,8 +254,22 @@ app.delete('/api/records/:id', async (req, res) => {
 // =================================================================
 
 // 1. 자주 가는 병원/약국 관리 (기존 유지)
-app.get('/manage-places', (req, res) => {
-    res.render('manage-places', { user: req.session.user || { username: "김실험" } });
+app.get('/manage-places', async (req, res) => {
+    if (!req.session.user) return res.redirect('/login');
+    const currentUserId = req.session.user.userId;
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query("USE dr_mas_db");
+        // 👇 화면에 places 데이터를 넘겨주는 핵심 부분!
+        const places = await conn.query("SELECT * FROM favorite_places WHERE user_id = ?", [currentUserId]);
+        res.render('manage-places', { user: req.session.user, places: places }); 
+    } catch (err) {
+        console.error("병원/약국 조회 에러:", err);
+        res.status(500).send("DB 조회 오류 발생");
+    } finally {
+        if (conn) conn.release();
+    }
 });
 
 // 2-A. [긴급 연락처] 화면 조회 (DB에서 해당 유저의 목록만 가져오기)
