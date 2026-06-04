@@ -77,8 +77,8 @@
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
             <button onclick="sendChat()">전송</button>
             <button id="micBtn" type="button" onclick="startSpeechRecognition()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #10b981; margin-right: 10px;">
-            <i class="fa-solid fa-microphone"></i>
-</button>
+                <i class="fa-solid fa-microphone"></i>
+            </button>
         </div>
     </div>
 
@@ -94,44 +94,38 @@
                 <div id="records-box" class="records-container">
                     <p id="records-empty" style="text-align:center; color:#888; font-size:0.9rem;">기록을 불러오는 중입니다...</p>
                 </div>
-               <li>
-            <a href="/manage-places" class="menu-item" style="text-decoration: none; color: inherit; display: block;">
-            🏥 자주 가는 병원/약국</a></li>
+                <li onclick="location.href='/manage-places'">🏥 자주 가는 병원/약국</li>
                 <li onclick="location.href='/emergency-contact'">긴급 연락처 (보호자) 설정</li>
                 <li onclick="location.href='/health-alerts'">건강 알림 설정</li>
                 <li onclick="alert('준비 중인 기능입니다.');">앱 설정</li>
-                <li>
-                    <a href="/logout" class="menu-item" style="text-decoration: none; color: #ef4444; display: block; font-weight: bold;">
-                        🚪 로그아웃
-                    </a>
-                </li>
+                <li style="color: #ef4444; font-weight: bold;" onclick="location.href='/logout'">🚪 로그아웃</li>
             </ul>
             <div style="margin-top: 25px; background: #f0fdf4; border: 1px dashed #22c55e; border-radius: 12px; padding: 15px;">
-            <h4 style="color: #16a34a; margin-bottom: 8px; font-size: 14px;">📸 MAS AI 처방전/약 봉지 스캔</h4>
-            <p style="font-size: 11px; color: #666; margin-bottom: 12px;">처방전이나 약 봉지 사진을 올리면 AI가 즉시 분석해 줍니다.</p>
-    
-            <div style="display: flex; gap: 5px;">
-            <input type="file" id="prescriptionFile" accept="image/*" style="font-size: 12px; flex: 1;">
-            <button onclick="uploadAndAnalyzeImage()" style="background: #22c55e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;">분석 시작</button>
-    </div>
+                <h4 style="color: #16a34a; margin-bottom: 8px; font-size: 14px;">📸 MAS AI 처방전/약 봉지 스캔</h4>
+                <p style="font-size: 11px; color: #666; margin-bottom: 12px;">처방전이나 약 봉지 사진을 올리면 AI가 즉시 분석해 줍니다.</p>
+        
+                <div style="display: flex; gap: 5px;">
+                    <input type="file" id="prescriptionFile" accept="image/*" style="font-size: 12px; flex: 1;">
+                    <button onclick="uploadAndAnalyzeImage()" style="background: #22c55e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;">분석 시작</button>
+                </div>
 
-    <div id="aiLoading" style="display: none; font-size: 12px; color: #16a34a; font-weight: bold; margin-top: 10px; text-align: center;">🔄 AI가 사진 속 글자를 분석 중입니다... 잠시만 기다려주세요.</div>
-    <div id="analysisResult" style="display: none; margin-top: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.6; color: #333; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
-</div>
+                <div id="aiLoading" style="display: none; font-size: 12px; color: #16a34a; font-weight: bold; margin-top: 10px; text-align: center;">🔄 AI가 사진 속 글자를 분석 중입니다... 잠시만 기다려주세요.</div>
+                <div id="analysisResult" style="display: none; margin-top: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.6; color: #333; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
+            </div>
         </div>
     </div>
 
     <div class="bottom-nav">
-    <div class="nav-item active" id="nav-chat" onclick="switchTab('chat')">
-        <div class="nav-icon">💬</div>상담하기
+        <div class="nav-item active" id="nav-chat" onclick="switchTab('chat')">
+            <div class="nav-icon">💬</div>상담하기
+        </div>
+        <div class="nav-item" style="color: #ef4444;" onclick="triggerSOS()">
+            <div class="nav-icon">🚨</div>SOS 호출
+        </div>
+        <div class="nav-item" id="nav-mypage" onclick="switchTab('mypage')">
+            <div class="nav-icon">👤</div>마이페이지
+        </div>
     </div>
-    <div class="nav-item" style="color: #ef4444;" onclick="triggerSOS()">
-        <div class="nav-icon">🚨</div>SOS 호출
-    </div>
-    <div class="nav-item" id="nav-mypage" onclick="switchTab('mypage')">
-        <div class="nav-icon">👤</div>마이페이지
-    </div>
-</div>
 </div>
 
 <div id="record-modal" class="modal-overlay" onclick="closeModalOnBgClick(event)">
@@ -140,8 +134,7 @@
             <span class="modal-title">상세 분석 가이드</span>
             <button class="modal-close" onclick="closeRecordModal()">&times;</button>
         </div>
-        <div id="modal-body" class="modal-body">
-            </div>
+        <div id="modal-body" class="modal-body"></div>
     </div>
 </div>
 
@@ -160,7 +153,6 @@
     function openRecordModal(guideText) {
         const modal = document.getElementById('record-modal');
         const modalBody = document.getElementById('modal-body');
-        // 줄바꿈 문자를 HTML <br> 태그로 변환하여 삽입
         modalBody.innerHTML = guideText ? guideText.replace(/\n/g, '<br>') : "상세 가이드 기록이 없습니다.";
         modal.style.display = 'flex';
     }
@@ -169,7 +161,6 @@
         document.getElementById('record-modal').style.display = 'none';
     }
 
-    // 모달창 바깥(어두운 배경)을 클릭해도 닫히도록 설정
     function closeModalOnBgClick(event) {
         if (event.target.id === 'record-modal') {
             closeRecordModal();
@@ -202,11 +193,8 @@
             data.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'record-item';
-                
-                // 데이터 세트를 이용하여 안전하게 가이드 텍스트 저장
                 itemDiv.dataset.guide = item.ai_guide; 
                 
-                // 항목을 클릭하면 모달을 열어주는 이벤트 리스너 추가
                 itemDiv.onclick = function() {
                     openRecordModal(this.dataset.guide);
                 };
@@ -257,222 +245,211 @@
 
     let cachedLocation = null;
 
-// 💡 1. 페이지가 열리자마자 백그라운드에서 위치를 미리 찾아둡니다!
-window.addEventListener('DOMContentLoaded', async () => {
-    try {
-        cachedLocation = await getFastLocation();
-        console.log("위치 사전 로딩 완료!");
-    } catch (e) {
-        console.log("위치 사전 로딩 실패, 기본값 대기");
-    }
-});
-
-async function sendChat() {
-    const symptomText = symptomInput.value.trim();
-    if(!symptomText) return alert("증상을 입력해주세요!");
-    
-    appendMessage('user', symptomText);
-    symptomInput.value = '';
-    
-    const msgDiv = document.createElement('div');
-    msgDiv.className = `msg ai`;
-    msgDiv.innerHTML = '<span style="color:#888;">MAS가 분석 중입니다... ⏳</span>';
-    chatWindow.appendChild(msgDiv);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-
-    try {
-        // 💡 2. 매번 새로 찾지 않고, 미리 찾아둔 위치를 바로 꺼내 씁니다. (여기서 1.5초 단축!!)
-        let userLoc = cachedLocation; 
-        if (!userLoc) {
-            userLoc = await getFastLocation(); // 혹시라도 못 찾았으면 그때만 찾음
+    window.addEventListener('DOMContentLoaded', async () => {
+        try {
+            cachedLocation = await getFastLocation();
+            console.log("위치 사전 로딩 완료!");
+        } catch (e) {
+            console.log("위치 사전 로딩 실패, 기본값 대기");
         }
+    });
 
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symptomText: symptomText, userLat: userLoc.lat, userLng: userLoc.lng })
-        });
+    async function sendChat() {
+        const symptomText = symptomInput.value.trim();
+        if(!symptomText) return alert("증상을 입력해주세요!");
         
-        // --- (이 아래 스트리밍 출력 부분은 기존과 완벽히 동일하게 두시면 됩니다) ---
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let fullText = "";
-
-        msgDiv.innerHTML = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break; 
-            fullText += decoder.decode(value, { stream: true });
-            msgDiv.innerHTML = fullText
-                .replace(/\[질환\]/g, '<span class="badge">🩺 예상 질환:</span> ')
-                .replace(/\[가이드\]/g, '<br><br><strong>💡 가이드</strong><br>')
-                .replace(/\n/g, '<br>');
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-        }
-    } catch (error) {
-        msgDiv.innerHTML = "서버 통신에 실패했습니다.";
-    }
-}
-// --- 의료 기록 삭제 기능 ---
-async function deleteRecord(recordId) {
-    if (!confirm("정말로 이 기록을 삭제하시겠습니까?")) return;
-
-    try {
-        const response = await fetch(`/api/records/${recordId}`, {
-            method: 'DELETE'
-        });
+        appendMessage('user', symptomText);
+        symptomInput.value = '';
         
-        const result = await response.json();
-        
-        if (response.ok && result.success) {
-            alert("삭제되었습니다.");
-            // 삭제가 완료되면 화면을 다시 깔끔하게 불러옵니다.
-            document.getElementById('records-box').style.display = 'none';
-            toggleMedicalRecords(); 
-        } else {
-            alert(result.message || "삭제에 실패했습니다.");
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `msg ai`;
+        msgDiv.innerHTML = '<span style="color:#888;">MAS가 분석 중입니다... ⏳</span>';
+        chatWindow.appendChild(msgDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        try {
+            let userLoc = cachedLocation; 
+            if (!userLoc) {
+                userLoc = await getFastLocation();
+            }
+
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ symptomText: symptomText, userLat: userLoc.lat, userLng: userLoc.lng })
+            });
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let fullText = "";
+
+            msgDiv.innerHTML = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break; 
+                fullText += decoder.decode(value, { stream: true });
+                msgDiv.innerHTML = fullText
+                    .replace(/\[질환\]/g, '<span class="badge">🩺 예상 질환:</span> ')
+                    .replace(/\[가이드\]/g, '<br><br><strong>💡 가이드</strong><br>')
+                    .replace(/\n/g, '<br>');
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            }
+
+            // [개선 반영] 스트리밍 종료 후 음성 인식 모드일 경우 음성 출력 실행
+            if (isVoiceMode) {
+                speakAIResponse(fullText);
+                isVoiceMode = false;
+            }
+
+        } catch (error) {
+            msgDiv.innerHTML = "서버 통신에 실패했습니다.";
         }
-    } catch (error) {
-        console.error("삭제 요청 에러:", error);
-        alert("서버 통신에 실패했습니다.");
-    }
-}
-
-// 📸 처방전 이미지 서버 전송 및 Gemini 분석 요청 함수
-async function uploadAndAnalyzeImage() {
-    const fileInput = document.getElementById('prescriptionFile');
-    const loadingDiv = document.getElementById('aiLoading');
-    const resultDiv = document.getElementById('analysisResult');
-
-    if (!fileInput.files || fileInput.files.length === 0) {
-        alert('분석할 사진 파일을 먼저 선택해 주세요!');
-        return;
     }
 
-    // 화면 로딩 켜기
-    loadingDiv.style.display = 'block';
-    resultDiv.style.display = 'none';
-    resultDiv.innerHTML = '';
+    // --- 의료 기록 삭제 기능 ---
+    async function deleteRecord(recordId) {
+        if (!confirm("정말로 이 기록을 삭제하시겠습니까?")) return;
 
-    // FormData에 이미지 파일 담기
-    const formData = new FormData();
-    formData.append('prescriptionImage', fileInput.files[0]);
-
-    try {
-        const response = await fetch('/api/analyze-prescription', {
-            method: 'POST',
-            body: formData // 💡 파일 전송은 JSON이 아니라 FormData로 보냅니다!
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-            // 성공 시 결과 노출
-            resultDiv.innerHTML = data.analysis;
-            resultDiv.style.display = 'block';
-        } else {
-            alert(data.error || '분석 중 오류가 발생했습니다.');
+        try {
+            const response = await fetch(`/api/records/${recordId}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                alert("삭제되었습니다.");
+                document.getElementById('records-box').style.display = 'none';
+                toggleMedicalRecords(); 
+            } else {
+                alert(result.message || "삭제에 실패했습니다.");
+            }
+        } catch (error) {
+            console.error("삭제 요청 에러:", error);
+            alert("서버 통신에 실패했습니다.");
         }
-    } catch (error) {
-        console.error('통신 에러:', error);
-        alert('서버와 연결할 수 없습니다.');
-    } finally {
-        // 로딩 끄기
-        loadingDiv.style.display = 'none';
     }
-}
-async function triggerSOS() {
-    if (!confirm("🚨 긴급 상황입니까? 등록된 보호자에게 SOS 알림을 전송합니다.")) return;
 
-    try {
-        const response = await fetch('/api/sos', { method: 'POST' });
-        const result = await response.json();
+    // 📸 처방전 이미지 서버 전송 및 Gemini 분석 요청 함수
+    async function uploadAndAnalyzeImage() {
+        const fileInput = document.getElementById('prescriptionFile');
+        const loadingDiv = document.getElementById('aiLoading');
+        const resultDiv = document.getElementById('analysisResult');
 
-        if (response.ok && result.success) {
-            alert("보호자에게 긴급 알림이 전송되었습니다.");
-        } else {
-            alert(result.message || "알림 전송에 실패했습니다.");
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('분석할 사진 파일을 먼저 선택해 주세요!');
+            return;
         }
-    } catch (error) {
-        console.error("SOS 호출 에러:", error);
-        alert("서버 통신에 실패했습니다.");
+
+        loadingDiv.style.display = 'block';
+        resultDiv.style.display = 'none';
+        resultDiv.innerHTML = '';
+
+        const formData = new FormData();
+        formData.append('prescriptionImage', fileInput.files[0]);
+
+        try {
+            const response = await fetch('/api/analyze-prescription', {
+                method: 'POST',
+                body: formData 
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                resultDiv.innerHTML = data.analysis;
+                resultDiv.style.display = 'block';
+            } else {
+                alert(data.error || '분석 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('통신 에러:', error);
+            alert('서버와 연결할 수 없습니다.');
+        } finally {
+            loadingDiv.style.display = 'none';
+        }
     }
-}
-// =================================================================
-// 🎙️ 음성 인식 (STT) 및 음성 출력 (TTS) 모듈
-// =================================================================
-let isVoiceMode = false; // 마이크로 질문했는지 기억하는 변수
 
-// 1. 마이크 버튼 누를 때 실행되는 함수 (말하기 -> 글자 변환)
-function startSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert("현재 브라우저는 음성 인식을 지원하지 않습니다. (크롬, 엣지 권장)");
-        return;
+    async function triggerSOS() {
+        if (!confirm("🚨 긴급 상황입니까? 등록된 보호자에게 SOS 알림을 전송합니다.")) return;
+
+        try {
+            const response = await fetch('/api/sos', { method: 'POST' });
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                alert("보호자에게 긴급 알림이 전송되었습니다.");
+            } else {
+                alert(result.message || "알림 전송에 실패했습니다.");
+            }
+        } catch (error) {
+            console.error("SOS 호출 에러:", error);
+            alert("서버 통신에 실패했습니다.");
+        }
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ko-KR'; // 한국어 설정
-    recognition.interimResults = false;
+    // =================================================================
+    // 🎙️ 음성 인식 (STT) 및 음성 출력 (TTS) 모듈
+    // =================================================================
+    let isVoiceMode = false; 
 
-    const micBtn = document.getElementById('micBtn');
+    function startSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("현재 브라우저는 음성 인식을 지원하지 않습니다. (크롬, 엣지 권장)");
+            return;
+        }
 
-    // 마이크 켜짐
-    recognition.onstart = function() {
-        micBtn.style.color = '#ef4444'; // 빨간색으로 변경 (녹음 중)
-        document.getElementById('chatInput').placeholder = "말씀해 주세요... 듣고 있습니다!"; 
-        // 💡 주의: 'chatInput' 부분은 조원님의 실제 input 태그 id에 맞게 수정하세요!
-    };
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ko-KR'; 
+        recognition.interimResults = false;
 
-    // 말하기 끝 -> 글자로 변환됨
-    recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
-        document.getElementById('chatInput').value = transcript;
-        isVoiceMode = true; // "음성으로 질문했음" 표시
-        
-        // 변환된 텍스트를 바로 전송하는 함수 호출 (조원님의 전송 함수 이름으로 바꾸세요!)
-        // 예: sendMessage(); 
-    };
+        const micBtn = document.getElementById('micBtn');
 
-    // 마이크 꺼짐
-    recognition.onspeechend = function() {
-        recognition.stop();
-        micBtn.style.color = '#10b981'; // 원래 초록색으로 복구
-        document.getElementById('chatInput').placeholder = "메시지를 입력하세요...";
-    };
+        recognition.onstart = function() {
+            micBtn.style.color = '#ef4444'; 
+            // [개선 반영] chatInput -> symptom ID로 정상 수정
+            document.getElementById('symptom').placeholder = "말씀해 주세요... 듣고 있습니다!"; 
+        };
 
-    recognition.onerror = function(event) {
-        console.error("음성 인식 에러:", event.error);
-        micBtn.style.color = '#10b981';
-    };
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            // [개선 반영] chatInput -> symptom ID로 정상 수정
+            document.getElementById('symptom').value = transcript;
+            isVoiceMode = true; 
+            
+            // [개선 반영] 코멘트 처리되어 있던 전송 함수를 실제 정의된 sendChat() 호출로 연결
+            sendChat();
+        };
 
-    recognition.start();
-}
+        recognition.onspeechend = function() {
+            recognition.stop();
+            micBtn.style.color = '#10b981'; 
+            document.getElementById('symptom').placeholder = "증상을 입력하세요 (예: 머리가 아파요)";
+        };
 
-// 2. AI의 답변을 사람 목소리로 읽어주는 함수 (글자 -> 말하기)
-function speakAIResponse(text) {
-    if (!window.speechSynthesis) return;
+        recognition.onerror = function(event) {
+            console.error("음성 인식 에러:", event.error);
+            micBtn.style.color = '#10b981';
+            document.getElementById('symptom').placeholder = "증상을 입력하세요 (예: 머리가 아파요)";
+        };
 
-    // AI 특유의 특수문자(*, #)를 제거해서 깔끔하게 읽도록 정제
-    const cleanText = text.replace(/[*#]/g, ''); 
+        recognition.start();
+    }
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'ko-KR'; // 한국어
-    utterance.rate = 1.1;     // 읽는 속도 (1.0이 기본, 1.1은 살짝 빠릿하게)
-    utterance.pitch = 1.0;    // 목소리 톤
+    function speakAIResponse(text) {
+        if (!window.speechSynthesis) return;
 
-    window.speechSynthesis.speak(utterance);
-} // 기존에 작성되어 있던 답변 받는 코드 안쪽 어딘가...
-const aiMessage = data.reply;
-appendMessage("AI", aiMessage); // 화면에 글자로 띄움
+        const cleanText = text.replace(/[*#]/g, ''); 
 
-// 👇 여기에 딱 4줄만 추가해 주세요! 👇
-if (isVoiceMode) { // 마이크로 질문했을 때만!
-    speakAIResponse(aiMessage); // AI 답변을 음성으로 읽어줍니다 🔊
-    isVoiceMode = false; // 초기화
-}
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'ko-KR'; 
+        utterance.rate = 1.1;     
+        utterance.pitch = 1.0;    
 
+        window.speechSynthesis.speak(utterance);
+    }
 </script>
 
 </body>
