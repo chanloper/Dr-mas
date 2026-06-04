@@ -278,9 +278,14 @@ app.get('/manage-places', async (req, res) => {
     try {
         conn = await pool.getConnection();
         await conn.query("USE dr_mas_db");
-        // 👇 화면에 places 데이터를 넘겨주는 핵심 부분!
         const places = await conn.query("SELECT * FROM favorite_places WHERE user_id = ?", [currentUserId]);
-        res.render('manage-places', { user: req.session.user, places: places }); 
+        
+        res.render('manage-places', { 
+            user: req.session.user, 
+            places: places,
+            kakaoKey: process.env.KAKAO_JS_KEY 
+        }); 
+
     } catch (err) {
         console.error("병원/약국 조회 에러:", err);
         res.status(500).send("DB 조회 오류 발생");

@@ -44,8 +44,7 @@
         .record-disease { color: #c62828; margin-top: 2px; }
 
         /* --- [3] 하단 네비게이션 바 스타일 --- */
-        .bottom-nav { position: absolute; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+.bottom-nav { position: absolute; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; z-index: 999; }        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
         .nav-item.active { color: #0056b3; font-weight: bold; }
         .nav-icon { font-size: 1.3rem; margin-bottom: 2px; }
 
@@ -79,7 +78,6 @@
             <button id="micBtn" type="button" onclick="toggleSpeech()" style="background: none; border: none; font-size: 24px; cursor: pointer; margin-right: 10px;">
             🎤
             </button>
-</button>
         </div>
     </div>
 
@@ -430,6 +428,8 @@ if (SpeechApi) {
         // 💡 chatInput을 symptom으로 변경!
         document.getElementById('symptom').value = event.results[0][0].transcript;
         isVoiceMode = true; 
+        
+        sendChat();
     };
 
     recognition.onend = () => {

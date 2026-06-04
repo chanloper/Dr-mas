@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>자주 가는 병원/약국 관리</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=4dd3bc8ad3457af4cae3468d504d62e7&libraries=services"></script>
     
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<%= kakaoKey %>&libraries=services"></script>    
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
@@ -162,52 +162,52 @@
             mapModal.classList.remove('hidden');
             document.getElementById('mapModalTitle').innerText = name;
 
-            const mapContainer = document.getElementById('kakaoMap'); 
-            
-            // 1. 초기 지도 생성 (기본 좌표 세팅)
-            const mapOption = {
-                center: new kakao.maps.LatLng(33.450701, 126.570667), // 임시 좌표
-                level: 3 // 확대 레벨
-            };  
-            const map = new kakao.maps.Map(mapContainer, mapOption); 
+            // 💡 핵심: 모달창이 화면에 나타나고 크기가 잡힐 때까지 0.1초(100ms) 기다린 후 지도를 생성합니다.
+            setTimeout(() => {
+                const mapContainer = document.getElementById('kakaoMap'); 
+                mapContainer.innerHTML = ''; // 혹시 남아있을 수 있는 이전 지도 초기화
+                
+                // 주소-좌표 변환 객체 생성
+                const geocoder = new kakao.maps.services.Geocoder();
 
-            // 2. 주소-좌표 변환 객체 생성
-            const geocoder = new kakao.maps.services.Geocoder();
+                // 주소 검색 먼저 실행
+                geocoder.addressSearch(address, function(result, status) {
+                    if (status === kakao.maps.services.Status.OK) {
+                        const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
 
-            // 3. 주소로 좌표를 검색합니다
-            geocoder.addressSearch(address, function(result, status) {
-                // 정상적으로 검색이 완료됐으면 
-                if (status === kakao.maps.services.Status.OK) {
-                    const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
+                        // 검색된 좌표를 중심으로 지도 생성
+                        const mapOption = {
+                            center: coords,
+                            level: 3 // 확대 레벨
+                        };  
+                        const map = new kakao.maps.Map(mapContainer, mapOption); 
 
-                    // 결과값으로 받은 위치를 마커로 표시합니다
-                    const marker = new kakao.maps.Marker({
-                        map: map,
-                        position: coords
-                    });
+                        // 마커 표시
+                        const marker = new kakao.maps.Marker({
+                            map: map,
+                            position: coords
+                        });
 
-                    // 인포윈도우로 장소에 대한 설명을 표시합니다
-                    const infowindow = new kakao.maps.InfoWindow({
-                        content: `<div style="width:150px;text-align:center;padding:6px 0;font-size:12px;">${name}</div>`
-                    });
-                    infowindow.open(map, marker);
+                        // 인포윈도우(툴팁) 표시
+                        const infowindow = new kakao.maps.InfoWindow({
+                            content: `<div style="width:150px;text-align:center;padding:6px 0;font-size:12px;">${name}</div>`
+                        });
+                        infowindow.open(map, marker);
 
-                    // 지도의 중심을 결과값으로 받은 위치로 이동시킵니다
-                    map.setCenter(coords);
-                    
-                    // 모달 창 내에서 지도가 깨지지 않도록 레이아웃 재배치
-                    setTimeout(() => map.relayout(), 100);
-                    setTimeout(() => map.setCenter(coords), 150);
-                } else {
-                    alert('정확한 주소를 찾을 수 없습니다. 주소를 다시 확인해주세요.');
-                    closeMap();
-                }
-            });    
+                        // 💡 혹시 모를 깨짐을 방지하는 카카오 공식 해결책
+                        map.relayout();
+                        map.setCenter(coords);
+                    } else {
+                        alert('정확한 주소를 찾을 수 없습니다. (예: 서울시 강남구 역삼동 123)');
+                        closeMap();
+                    }
+                });
+            }, 100); // 0.1초 대기
         }
 
         function closeMap() {
             document.getElementById('mapModal').classList.add('hidden');
-            document.getElementById('kakaoMap').innerHTML = ''; // 지도 초기화
+            document.getElementById('kakaoMap').innerHTML = ''; // 지도 찌꺼기 완벽 제거
         }
     </script>
 </body>
