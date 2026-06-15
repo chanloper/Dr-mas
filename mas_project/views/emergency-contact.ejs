@@ -1,3 +1,14 @@
+<!--
+ * =================================================================================
+ * [MAS: Medical Assistant System] 긴급 연락처(보호자) 설정 및 매핑 뷰 (emergency-contact.ejs)
+ * 설계 목적:
+ * 1. 1인 가구 및 고령자 응급 예외 상황 발생 시 1차 전송 타깃이 될 보호자 정보 입력 수집
+ * 2. EJS 템플릿 엔진 문법을 활용한 백엔드 적재 데이터의 동적 서버사이드 렌더링(SSR) 구현
+ * 3. Fetch API를 통한 비동기(Asynchronous) RESTful API 네고시에이션 및 JSON 페이로드 제어
+ * 4. 유효성 검증(Validation) 및 가용성(Usability) 극대화를 위한 반응형 디자인 레이아웃 구축
+ * 학과 및 학년: 컴퓨터공학 / 소프트웨어 전공 3~4학년 종합설계(캡스톤 디자인) 레벨
+ * =================================================================================
+-->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -5,19 +16,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>긴급 연락처 (보호자) 설정</title>
     <style>
+        /* -------------------------------------------------------------------------
+         * [디자인 시스템] 모바일 퍼스트 반응형 레이아웃 및 UX 고도화 가이드라인
+         * ------------------------------------------------------------------------- */
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
+        
+        /* 뷰포트 가로폭 임계치를 500px로 제한하여 스마트폰 및 모바일 뷰 최적화 컨테이너 구성 */
         .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .header { background-color: #0056b3; color: white; padding: 20px; text-align: center; font-size: 18px; font-weight: bold; position: relative; }
         .back-btn { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
         .content { padding: 20px; flex: 1; }
+        
+        /* [경고 가이드 카드] 긴급 알림 기능의 정체성을 부각시키는 디자인 컴포넌트 */
         .alert-box { background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-bottom: 25px; border-left: 5px solid #ffc107; }
         .form-box { background: #f1f3f9; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 5px; }
         input[type="text"], input[type="tel"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
         .btn-register { width: 100%; background-color: #0056b3; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        
         .section-title { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 12px; border-bottom: 2px solid #0056b3; padding-bottom: 5px; }
         .contact-list { display: flex; flex-direction: column; gap: 10px; }
+        
+        /* 보호자 카드 컴포넌트 간 정보 정렬을 위한 Flexbox 가이드 수립 */
         .contact-item { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
         .contact-info h4 { margin: 0 0 4px 0; color: #1e293b; font-size: 15px; }
         .contact-info p { margin: 0; color: #64748b; font-size: 13px; }
@@ -27,15 +48,18 @@
 </head>
 <body>
     <div class="container">
+        <!-- 상단 내비게이션 헤더 바 -->
         <div class="header">
             <a href="/chat" class="back-btn">◀</a>
             긴급 연락처 (보호자) 설정
         </div>
+        
         <div class="content">
             <div class="alert-box">
                 🚨 <b>위급 상황 대비:</b> 이상 증세 감지 시 등록된 연락처로 메시지가 자동 발송됩니다.
             </div>
 
+            <!-- 신규 보호자 자원(Resource) 등록 컨트롤 폼 영역 -->
             <div class="form-box">
                 <div class="form-group">
                     <label>보호자 이름 / 관계</label>
@@ -48,9 +72,15 @@
                 <button class="btn-register" onclick="addContact()">보호자 등록</button>
             </div>
 
+            <!-- 📌 등록된 데이터 출력 섹션 -->
             <div class="section-title">👥 등록된 보호자 목록</div>
+            
             <div id="contactList" class="contact-list">
-                <!-- 첫 번째 오탈자(에러) 수정됨 -->
+                <!-- 
+                  * 💡 [서버사이드 렌더링 예외 가드 구현]
+                  * 목적: 백엔드에서 빈 배열 혹은 undefined 상태로 contacts 인스턴스가 넘어올 경우 발생하는 런타임 렌더링 폭발 에러 방지
+                  * 기술: typeof 논리 연산자 및 데이터 길이 유효 조건 검증을 통한 선행 구조 방어 설계
+                -->
                 <% if (typeof contacts !== 'undefined' && contacts.length > 0) { %>
                     <% contacts.forEach(function(item) { %>
                         <div class="contact-item" id="item-<%= item.id %>">
@@ -64,34 +94,73 @@
                 <% } %>
             </div>
             
-            <!-- 두 번째 오탈자(에러) 수정됨 -->
+            <!-- 💡 등록된 보호자 데이터 유무에 따른 노출 상태 기계 분기 처리 (EJS 인라인 삼항 분기 렌더링 기술 적용) -->
             <div id="emptyMsg" class="empty-msg" style="display: <%= (typeof contacts !== 'undefined' && contacts.length > 0) ? 'none' : 'block' %>;">등록된 긴급 연락처가 없습니다.</div>
         </div>
     </div>
 
     <script>
+        /**
+         * =================================================================================
+         * [클라이언트 비동기 통신(REST API) 컨트롤러 비즈니스 로직]
+         * =================================================================================
+         */
+
+        /**
+         * 설명: 신규 보호자 비동기 등록 서비스
+         * 역할: 사용자가 폼에 입력한 정보를 수집 및 정제하여 백엔드로 JSON HTTP POST 통신 트리거
+         */
         async function addContact() {
+            // DOM 스캔 및 여백 절삭(Trimming) 처리
             const name = document.getElementById('nameInput').value.trim();
             const phone = document.getElementById('phoneInput').value.trim();
+            
+            // [예외 방어 코드] 폼 누락 여부 클라이언트 1차 유효성 검증
             if (!name || !phone) return alert('모두 입력해 주세요!');
 
-            const res = await fetch('/api/emergency-contact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, phone })
-            });
-            if (res.ok) {
-                alert('DB에 안전하게 등록되었습니다!');
-                location.reload(); // 등록 후 서버 연동을 위해 새로고침 (주석 오탈자 수정)
+            try {
+                // 비동기 fetch API를 통해 헤더 정보 규격화 및 요청 바디 데이터 직렬화 전송
+                const res = await fetch('/api/emergency-contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, phone })
+                });
+
+                if (res.ok) {
+                    alert('DB에 안전하게 등록되었습니다!');
+                    // 런타임 영속성 반영과 최신 상태 동기화를 위한 페이지 주소 재검색(Reload) 실행
+                    location.reload(); 
+                } else {
+                    alert('등록 과정 중 서버 측 유효성 검증 실패 혹은 오류가 야기되었습니다.');
+                }
+            } catch (networkError) {
+                console.error("통신 장애 발생:", networkError);
+                alert("네트워크 통신 장애가 발생했습니다. 백엔드 활성 상태를 모니터링하세요.");
             }
         }
 
+        /**
+         * 설명: 기존 등록된 보호자 비동기 삭제 서비스
+         * 역할: 런타임에 주입된 고유 데이터 식별 키(item.id)를 수신하여 DELETE RESTful 리스너 통신 수행
+         * @param {string} id - MariaDB 내 emergency_contacts 테이블 고유 인덱스 ID 
+         */
         async function deleteContact(id) {
+            // 잘못된 클릭으로 인한 데이터 유실 방지용 이중 안전 안전장치 구축
             if (!confirm('정말 삭제하시겠습니까?')) return;
-            const res = await fetch(`/api/emergency-contact/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                alert('삭제 완료!');
-                location.reload();
+            
+            try {
+                // 시맨틱 웹 표준을 준수하는 RESTful URI 구조 기반 DELETE 통신 요청
+                const res = await fetch(`/api/emergency-contact/${id}`, { method: 'DELETE' });
+                
+                if (res.ok) {
+                    alert('삭제 완료!');
+                    location.reload(); // 캐시 데이터 오염 방지 및 DB 매핑 갱신을 위한 새로고침 처리
+                } else {
+                    alert('삭제 요청 처리에 실패했습니다. 리소스 상태를 확인하세요.');
+                }
+            } catch (networkError) {
+                console.error("통신 장애 발생:", networkError);
+                alert("삭제 처리 중 네트워크 에러가 발생했습니다.");
             }
         }
     </script>
