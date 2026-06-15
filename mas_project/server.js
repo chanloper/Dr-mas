@@ -208,10 +208,9 @@ app.post('/api/chat', async (req, res) => {
         }
 
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
-            systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답해. 단, [질환] 섹션에는 절대 길게 설명하지 말고 예상되는 질환명 단어만 1~3개 쉼표로 적어라."
-        });
-
+    model: 'gemini-2.5-flash',
+    systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답해. [질환]에는 질환명만 짧게 적고, [가이드]에는 완화 팁과 함께 프롬프트로 전달된 [추천 병원]과 [추천 약국] 목록을 반드시 포함해서 안내해라."
+});
         const prompt = `
         [사용자 증상]: "${symptomText}"
         [추천 병원]: ${localMedicalData.hospitals.join(', ') || '없음'}
