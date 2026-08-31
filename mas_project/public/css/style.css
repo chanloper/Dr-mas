@@ -1,0 +1,138 @@
+/* * ==========================================================
+ * [MAS: Medical Assistant System] 통합 UI/UX 스타일시트
+ * ==========================================================
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+}
+
+body {
+    background-color: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* 중앙 메인 카드 컨테이너 */
+.main-container {
+    width: 100%;
+    max-width: 400px;
+    background: white;
+    padding: 40px 30px;
+    border-radius: 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    margin: 20px;
+}
+
+/* 아이콘 렌더링 */
+.logo-icon {
+    font-size: 60px;
+    color: #0056b3;
+    margin-bottom: 20px;
+}
+
+/* 타이포그래피 */
+h1 {
+    font-size: 28px;
+    color: #1e293b;
+    margin-bottom: 10px;
+    font-weight: 900;
+}
+
+p {
+    font-size: 15px;
+    color: #64748b;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+/* 버튼 디자인 시스템 */
+.btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 12px;
+    border: none;
+}
+
+.btn-primary {
+    background-color: #0056b3;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 86, 179, 0.3);
+}
+
+.btn-primary:hover {
+    background-color: #004494;
+    transform: translateY(-2px);
+}
+
+.btn-outline {
+    background-color: white;
+    color: #0056b3;
+    border: 2px solid #0056b3;
+}
+
+.btn-outline:hover {
+    background-color: #f8faff;
+    transform: translateY(-2px);
+}
+
+/* 입력 폼 디자인 */
+.form-group {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    color: #4a5568;
+    margin-bottom: 8px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    font-size: 15px;
+    background-color: #f8fafc;
+    transition: border-color 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #0056b3;
+    background-color: white;
+    box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.1);
+}
+
+/* 하단 텍스트 링크 */
+.link-text {
+    display: block;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #64748b;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.link-text:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}

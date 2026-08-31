@@ -1,3 +1,14 @@
+<!--
+ * =================================================================================
+ * [MAS: Medical Assistant System] 자주 방문하는 의료기관 자원 관리 및 LBS 뷰 (manage-places.ejs)
+ * 설계 및 엔지니어링 목적:
+ * 1. Kakao Map JavaScript SDK를 활용한 위치 기반 서비스(LBS, Location-Based Service) 시각화
+ * 2. Geocoding(주소-좌표 변환) 기술을 통한 비정형 텍스트 주소의 위·경도(LatLng) 데이터 정규화 매핑
+ * 3. 브라우저 렌더링 엔진의 Reflow/Repaint 타이밍 불일치로 인한 지도 타일 깨짐 현상 극복 알고리즘(setTimeout + relayout) 적용
+ * 4. RESTful API 통신 기반의 비동기 의료기관 리소스(CRUD) 관리 파이프라인 구축
+ * 학과 및 학년: 컴퓨터공학 / 소프트웨어 전공 3~4학년 종합설계(캡스톤 디자인) 레벨
+ * =================================================================================
+-->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -5,30 +16,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>자주 가는 병원/약국 관리</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<<<<<<< HEAD
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=<%= kakaoJsKey %>&libraries=services"></script>
-=======
     
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=<%= kakaoKey %>&libraries=services"></script>    
->>>>>>> 5ce0348c4eff8342844eedc0ee6a799f49ef3fbd
+    <!-- 
+      * 💡 [외부 지도 API 바인딩 및 Git 충돌 해결 완료 구역] 
+      * 서버사이드(Node.js)의 환경변수(dotenv)에서 주입된 카카오 API 키를 EJS 템플릿 엔진으로 렌더링 시점에 동적 할당함.
+      * libraries=services 파라미터를 추가하여 Geocoder(주소-좌표 변환) 확장을 동기적으로 로드함.
+    -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=<%= kakaoKey %>&libraries=services"></script>    
+    
     <style>
+        /* -------------------------------------------------------------------------
+         * [디자인 시스템] 모바일 최적화 및 뷰포트 레이아웃 구성
+         * ------------------------------------------------------------------------- */
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .header { background-color: #10b981; color: white; padding: 20px; text-align: center; font-size: 18px; font-weight: bold; position: relative; }
         .back-btn { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
         .content { padding: 20px; flex: 1; }
+        
+        /* 사용자 입력 폼 컴포넌트 스타일링 (가독성 및 사용성 최적화) */
         .form-box { background: #f1f5f9; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 5px; }
         input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
         textarea { resize: none; height: 60px; font-family: inherit; }
+        
         .btn-register { width: 100%; background-color: #10b981; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-register:hover { background-color: #059669; }
         
+        /* 등록된 리소스 렌더링 카드 컴포넌트 */
         .section-title { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 12px; border-bottom: 2px solid #10b981; padding-bottom: 5px; }
         .place-list { display: flex; flex-direction: column; gap: 10px; }
         .place-item { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; position: relative; display: flex; align-items: flex-start; gap: 15px; flex-wrap: wrap; }
         .place-icon { font-size: 24px; color: #10b981; margin-top: 3px; }
+        
         .place-info { flex: 1; min-width: 200px; }
         .place-info h4 { margin: 0 0 5px 0; color: #1e293b; font-size: 16px; }
         .place-info p { margin: 3px 0; color: #64748b; font-size: 13px; display: flex; align-items: center; gap: 5px; }
@@ -36,25 +57,35 @@
         .memo-box { width: 100%; background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; border-radius: 4px; font-size: 13px; color: #92400e; margin-top: 5px; }
         .btn-delete { background-color: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; position: absolute; top: 15px; right: 15px; }
         
-        /* 💡 카카오맵 모달 창 스타일 */
+        /* -------------------------------------------------------------------------
+         * 🗺️ [LBS 시각화] 카카오맵 모달 팝업 오버레이 및 Z-Index 계층 구조화
+         * ------------------------------------------------------------------------- */
         .map-btn { background-color: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: 5px; }
+        
+        /* 화면 전체를 덮어 사용자 포커스를 강제하는 모달 오버레이 (z-index 극대화) */
         .map-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .map-modal { background: white; width: 90%; max-width: 400px; border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
         .map-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .map-modal-header h3 { margin: 0; font-size: 16px; color: #1e293b; }
         .close-map-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; }
+        
+        /* 지도 타일이 동적으로 매핑될 타깃 캔버스 뷰포트 */
         #kakaoMap { width: 100%; height: 300px; border-radius: 8px; background-color: #e2e8f0; }
         
+        /* 상태 전이를 위한 유틸리티 클래스 (UI 감춤) */
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- 상단 라우팅 제어 및 내비게이션 복귀 앵커 -->
         <div class="header">
             <a href="/chat" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
             자주 가는 병원/약국 관리
         </div>
+        
         <div class="content">
+            <!-- [인프라 자원 등록 폼] 의료기관(병원/약국) 메타데이터 수집 컨테이너 -->
             <div class="form-box">
                 <div class="form-group">
                     <label>구분</label>
@@ -69,6 +100,7 @@
                 </div>
                 <div class="form-group">
                     <label>주소 (선택)</label>
+                    <!-- 지오코딩(Geocoding)의 소스가 될 원시 텍스트(Raw Text) 주소 입력 필드 -->
                     <input type="text" id="placeAddress" placeholder="예: 서울시 강남구 역삼동 123 (도로명/지번 모두 가능)">
                 </div>
                 <div class="form-group">
@@ -82,13 +114,19 @@
                 <button class="btn-register" onclick="addPlace()">등록하기</button>
             </div>
 
+            <!-- 📌 동적 DB 연동 리스트 렌더링 구역 -->
             <div class="section-title">📌 내 장소 목록</div>
             
             <div class="place-list" id="placeList">
+                <!-- 
+                  * 💡 [서버사이드 렌더링(SSR) 및 예외 가드]
+                  * 목적: 백엔드에서 전달된 places 객체의 무결성을 선행 검증하여 렌더링 파괴(Crash) 방지
+                -->
                 <% if (places && places.length > 0) { %>
                     <% places.forEach(function(item) { %>
                         <div class="place-item">
                             <div class="place-icon">
+                                <!-- 삼항 연산자를 활용한 아이콘 동적 매핑 -->
                                 <%= item.type === '병원' ? '🏥' : '💊' %>
                             </div>
                             <div class="place-info">
@@ -96,6 +134,7 @@
                                 <% if(item.address) { %>
                                     <p>
                                         <i class="fa-solid fa-location-dot"></i> <%= item.address %>
+                                        <!-- [이벤트 바인딩] 버튼 클릭 시 지오코딩에 필요한 인자(주소, 상호명)를 전달하며 지도 함수 트리거 -->
                                         <button class="map-btn" onclick="openMap('<%= item.address %>', '<%= item.name %>')">지도로 보기</button>
                                     </p>
                                 <% } %>
@@ -112,106 +151,140 @@
                 <% } %>
             </div>
 
+            <!-- 데이터가 빈(Empty) 배열일 경우 표출될 인라인 분기 처리 -->
             <div id="emptyMsg" class="empty-msg <%= (places && places.length > 0) ? 'hidden' : '' %>">
                 등록된 병원이나 약국이 없습니다.
             </div>
         </div>
     </div>
 
+    <!-- 🗺️ [LBS 타깃 캔버스] 동적 카카오 맵 렌더링을 위한 오버레이 모달 구조체 -->
     <div id="mapModal" class="map-modal-overlay hidden">
         <div class="map-modal">
             <div class="map-modal-header">
                 <h3 id="mapModalTitle">장소 위치</h3>
                 <button class="close-map-btn" onclick="closeMap()"><i class="fa-solid fa-xmark"></i></button>
             </div>
+            <!-- API 스크립트가 지도 타일을 계산하여 마운트할 실질적 DOM Node -->
             <div id="kakaoMap"></div>
         </div>
     </div>
 
     <script>
-        // --- 장소 추가 / 삭제 로직 ---
+        /**
+         * =================================================================================
+         * [클라이언트 비동기 통신 및 카카오 SDK 제어 자바스크립트 엔진]
+         * =================================================================================
+         */
+
+        // --- 1. 장소 추가 (Create) API 비동기 파이프라인 ---
         async function addPlace() {
+            // DOM 스캔 및 여백 절삭(Trimming) 처리
             const type = document.getElementById('placeType').value;
             const name = document.getElementById('placeName').value.trim();
             const address = document.getElementById('placeAddress').value.trim();
             const phone = document.getElementById('placePhone').value.trim();
             const memo = document.getElementById('placeMemo').value.trim();
 
+            // [예외 방어] 무결성 1차 클라이언트 검증
             if (!name) return alert('상호명은 필수 입력입니다!');
 
-            const res = await fetch('/api/places', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, name, address, phone, memo })
-            });
+            try {
+                // RESTful 규격에 맞춘 POST 메서드 및 JSON 페이로드 직렬화 전송
+                const res = await fetch('/api/places', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, name, address, phone, memo })
+                });
 
-            if (res.ok) {
-                alert('등록 완료!');
-                location.reload(); 
-            } else {
-                alert('등록에 실패했습니다.');
+                if (res.ok) {
+                    alert('등록 완료!');
+                    location.reload(); // 리소스 상태 최신화를 위한 뷰 동기화
+                } else {
+                    alert('서버 응답 오류: 등록에 실패했습니다.');
+                }
+            } catch(error) {
+                alert('네트워크 통신 오류가 발생했습니다.');
             }
         }
 
+        // --- 2. 장소 삭제 (Delete) API 비동기 파이프라인 ---
         async function deletePlace(id) {
+            // 실수 방지용 이중 안전 안전장치 구축
             if (!confirm('정말 삭제하시겠습니까?')) return;
-            const res = await fetch(`/api/places/${id}`, { method: 'DELETE' });
-            if (res.ok) location.reload();
-            else alert('삭제에 실패했습니다.');
+            
+            try {
+                const res = await fetch(`/api/places/${id}`, { method: 'DELETE' });
+                if (res.ok) location.reload();
+                else alert('삭제에 실패했습니다.');
+            } catch(error) {
+                alert('네트워크 통신 오류가 발생했습니다.');
+            }
         }
 
-        // --- 🗺️ 카카오맵 연동 로직 ---
+        // --- 3. 🗺️ [핵심 공학 요소] 카카오맵 SDK 연동 및 렌더링 라이프사이클 제어 ---
         function openMap(address, name) {
             const mapModal = document.getElementById('mapModal');
-            mapModal.classList.remove('hidden');
+            mapModal.classList.remove('hidden'); // 모달 UI 활성화 (display: none 해제)
             document.getElementById('mapModalTitle').innerText = name;
 
-            // 💡 핵심: 모달창이 화면에 나타나고 크기가 잡힐 때까지 0.1초(100ms) 기다린 후 지도를 생성합니다.
+            /**
+             * 💡 [트러블슈팅 및 공학적 해결 핵심 파트: 지도 깨짐(회색 화면) 버그 해결 알고리즘]
+             * 문제 원인: 모달 컨테이너가 'display: none' 상태에서 'block/flex'로 상태가 전이될 때, 
+             * 브라우저의 DOM 렌더링 엔진(Reflow)이 요소의 Width/Height를 계산하기 전에 카카오 SDK가 지도를 미리 그리려고 시도함.
+             * 해결 방안: 비동기 타이머(setTimeout)를 통해 브라우저의 렌더링 사이클을 마이크로태스크 큐로 지연시키고(100ms 대기),
+             * 타일 로드 후 SDK 내장 API인 map.relayout()을 호출하여 반응형 크기를 강제 동기화함.
+             */
             setTimeout(() => {
                 const mapContainer = document.getElementById('kakaoMap'); 
-                mapContainer.innerHTML = ''; // 혹시 남아있을 수 있는 이전 지도 초기화
+                mapContainer.innerHTML = ''; // 이전 인스턴스 충돌 방지를 위한 메모리 초기화
                 
-                // 주소-좌표 변환 객체 생성
+                // Kakao SDK 내장 지오코더(Geocoder) 인스턴스 생성
                 const geocoder = new kakao.maps.services.Geocoder();
 
-                // 주소 검색 먼저 실행
+                // 비정형 문자열 주소를 위도/경도(Latitude/Longitude) 좌표로 검색하는 비동기 서비스 호출
                 geocoder.addressSearch(address, function(result, status) {
                     if (status === kakao.maps.services.Status.OK) {
+                        // 결과값을 바탕으로 정확한 좌표(LatLng) 객체 인스턴스화
                         const coords = new kakao.maps.LatLng(result[0].y, result[0].x);
 
-                        // 검색된 좌표를 중심으로 지도 생성
+                        // 지도 렌더링 옵션 (초기 포커스 및 줌 레벨)
                         const mapOption = {
                             center: coords,
-                            level: 3 // 확대 레벨
+                            level: 3 // 대학 과제 스펙에 최적화된 근거리 가시성 확보 레벨
                         };  
+                        
+                        // 타깃 컨테이너에 실제 맵 객체 생성
                         const map = new kakao.maps.Map(mapContainer, mapOption); 
 
-                        // 마커 표시
+                        // 생성된 맵 위에 지리적 위치를 시각적으로 마킹할 핀(Marker) 생성
                         const marker = new kakao.maps.Marker({
                             map: map,
                             position: coords
                         });
 
-                        // 인포윈도우(툴팁) 표시
+                        // 핀 위에 상호명을 띄워주는 인포윈도우(툴팁) 레이어 생성 및 바인딩
                         const infowindow = new kakao.maps.InfoWindow({
                             content: `<div style="width:150px;text-align:center;padding:6px 0;font-size:12px;">${name}</div>`
                         });
                         infowindow.open(map, marker);
 
-                        // 💡 혹시 모를 깨짐을 방지하는 카카오 공식 해결책
+                        // 💡 [필수 동기화 파이프라인] 컨테이너 리사이징 후 변경된 크기에 맞춰 지도 타일 정렬 알고리즘 강제 수행
                         map.relayout();
-                        map.setCenter(coords);
+                        map.setCenter(coords); // 타일 재정렬 이후 좌표를 뷰포트 정중앙으로 재포커싱
                     } else {
-                        alert('정확한 주소를 찾을 수 없습니다. (예: 서울시 강남구 역삼동 123)');
+                        // 지오코딩 실패 예외 처리
+                        alert('정확한 주소를 데이터베이스에서 매핑할 수 없습니다.');
                         closeMap();
                     }
                 });
-            }, 100); // 0.1초 대기
+            }, 100); // 0.1초(100ms) 비동기 지연을 통한 브라우저 렌더링 락(Lock) 우회
         }
 
+        // 모달 파괴 및 객체 메모리 해제 컨트롤러
         function closeMap() {
             document.getElementById('mapModal').classList.add('hidden');
-            document.getElementById('kakaoMap').innerHTML = ''; // 지도 찌꺼기 완벽 제거
+            document.getElementById('kakaoMap').innerHTML = ''; // DOM 노드 삭제를 통한 브라우저 메모리 누수 방지
         }
     </script>
 </body>

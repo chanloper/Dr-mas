@@ -1,87 +1,134 @@
-<!DOCTYPE html>
-<html lang="ko">
+<!--
+  * =================================================================================
+  * [MAS: Medical Assistant System] 신규 사용자 자원 프로비저닝 및 회원가입 뷰 (register.ejs)
+  * 설계 및 엔지니어링 목적:
+  * 1. 신규 사용자의 개인정보(Credential 및 메타데이터)를 안전하게 수집하는 인터페이스 구축
+  * 2. CSS3 Keyframes 및 Transition을 활용한 하드웨어 가속 기반의 비동기 모달(Modal) 애니메이션 렌더링
+  * 3. Fetch API 기반의 비동기(Asynchronous) AJAX 통신으로 페이지 리로드 없는(SPA 경험) 데이터 적재 파이프라인 구현
+  * 4. 폼 제출 시 기본 이벤트(Default Action) 차단 및 자바스크립트 기반의 1차 유효성 페이로드 검증
+  * 학과 및 학년: 컴퓨터공학 / 소프트웨어 전공 3~4학년 종합설계(캡스톤 디자인) 기말 제출 규격
+  * =================================================================================
+-->
+<!DOCTYPE html> <!-- HTML5 공인 표준 도큐먼트 규격 선언 (렌더링 최적화 및 웹 표준 보장) -->
+<html lang="ko"> <!-- 브라우저의 텍스트 렌더링 엔진 최적화 및 웹 접근성을 위한 한국어(ko) 명시 -->
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"> <!-- 한글 및 다국어 데이터 처리의 무결성을 보장하는 UTF-8 유니코드 인코딩 선언 -->
+    <!-- 모바일 디바이스 해상도에 맞춘 동적 뷰포트 스케일링을 통해 UI 깨짐 현상을 방지하는 메타 태그 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAS - 회원가입</title>
+    <title>MAS - 회원가입</title> <!-- 클라이언트 브라우저 탭 타이틀(문서 제목) 설정 -->
+    
+    <!-- 🎨 관심사의 분리(SoC, Separation of Concerns) 패턴에 따른 정적 스타일시트 외부 링크 연동 -->
     <link rel="stylesheet" href="/css/style.css">
+    <!-- 경량화된 벡터 그래픽 기반의 아이콘 렌더링을 위한 FontAwesome 패키지 비동기 로드(CDN) -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <style>
-        /* ✨ 회원가입 성공 시 나타날 세련된 모달 팝업 디자인 */
+        /* ✨ [비동기 UI/UX 컴포넌트] 회원가입 성공 시 렌더링될 모달 팝업의 CSS 상태 기계(State Machine) 설계 */
+        
+        /* 모달 배경을 덮는 오버레이(Overlay) 레이어: 초기 상태는 투명(opacity: 0) 및 클릭 무시(pointer-events: none) */
         .success-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex; justify-content: center; align-items: center;
-            opacity: 0; pointer-events: none;
-            transition: opacity 0.3s ease;
-            z-index: 9999;
+            position: fixed; /* 브라우저 뷰포트 기준 절대 고정 배치 */
+            top: 0; left: 0; width: 100%; height: 100%; /* 화면 전체 점유율 100% 할당 */
+            background: rgba(0, 0, 0, 0.5); /* 시각적 깊이감(Depth)을 부여하는 반투명 딤(Dim) 처리 */
+            display: flex; justify-content: center; align-items: center; /* Flexbox 기반 중앙 정렬 레이아웃 구성 */
+            opacity: 0; pointer-events: none; /* DOM 트리에 존재하나 시각적/물리적으로 비활성화된 대기 상태 */
+            transition: opacity 0.3s ease; /* 상태 변화 시 0.3초간 부드럽게 페이드-인 되도록 트랜지션 보간 처리 */
+            z-index: 9999; /* 다른 모든 DOM 요소보다 최상단 레이어에 위치하도록 Z-축 인덱스 극대화 */
         }
+        
+        /* 자바스크립트 DOM 조작으로 'active' 클래스 주입 시 모달 오버레이가 활성화되는 Trigger CSS 속성 */
         .success-modal-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
+            opacity: 1; /* 투명도를 100%로 복원하여 시각화 */
+            pointer-events: auto; /* 마우스 클릭 등 물리적 이벤트 인터랙션 재활성화 */
         }
+        
+        /* 팝업 메시지 및 프로그레스 바를 담는 핵심 물리 컨테이너 박스 */
         .success-modal {
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            transform: scale(0.8);
-            transition: transform 0.3s ease;
-            max-width: 350px;
-            width: 90%;
+            background: white; /* 가독성 확보를 위한 솔리드 백그라운드 적용 */
+            padding: 30px; /* 내부 여백(Padding) 확보 */
+            border-radius: 16px; /* 모던 UI 트렌드를 반영한 둥근 모서리 곡률 적용 */
+            text-align: center; /* 내부 텍스트 및 인라인 요소 중앙 정렬 */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); /* 떠 있는 듯한 입체감을 주는 Z축 박스 쉐도우 렌더링 */
+            transform: scale(0.8); /* 팝업 전 초기 스케일을 80%로 축소 대기 (하드웨어 가속 애니메이션 준비 상태) */
+            transition: transform 0.3s ease; /* 크기 팽창에 대한 애니메이션 타이밍 함수 결합 */
+            max-width: 350px; /* 데스크톱 환경에서의 과도한 팽창을 막기 위한 최대 가로폭 임계치(Threshold) 설정 */
+            width: 90%; /* 모바일 뷰포트에서 좌우 여백을 확보하는 상대 길이(Relative Length) 지정 */
         }
+        
+        /* 'active' 상태 획득 시 80% 였던 스케일이 100%로 튕기듯 커지는 팝-인(Pop-in) 효과 발생 */
         .success-modal-overlay.active .success-modal {
             transform: scale(1);
         }
+        
+        /* DB 적재 성공(Success)을 직관적으로 표상하는 아이콘 그래픽 속성 */
         .success-icon {
-            font-size: 50px;
-            color: #22c55e;
-            margin-bottom: 15px;
-            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 50px; /* 아이콘 가시성 극대화 */
+            color: #22c55e; /* 심리적 안정감을 주는 긍정(Positive)의 그린 헥스(HEX) 컬러 적용 */
+            margin-bottom: 15px; /* 타이틀과의 하단 여백 분리 */
+            /* GPU 하드웨어 가속을 활용한 커스텀 큐빅-베지에(Cubic-Bezier) 바운스 애니메이션 바인딩 */
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
         }
+        
+        /* CSS3 Keyframes를 활용한 커스텀 애니메이션 시퀀스 정의 (0% 상태에서 100% 스케일로 팽창) */
         @keyframes popIn {
             0% { transform: scale(0); }
             100% { transform: scale(1); }
         }
-        .success-modal h2 {
-            font-size: 20px; color: #1e293b; margin-bottom: 8px;
-        }
-        .success-modal p {
-            font-size: 14px; color: #64748b; margin-bottom: 20px;
-        }
-        .loading-bar {
-            width: 100%; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;
-        }
-        .loading-progress {
-            width: 0%; height: 100%; background: #0056b3; transition: width 1.5s linear;
+        
+        /* 모달 텍스트 타이포그래피(Typography) 계층 구조 설정 */
+        .success-modal h2 { font-size: 20px; color: #1e293b; margin-bottom: 8px; }
+        .success-modal p { font-size: 14px; color: #64748b; margin-bottom: 20px; }
+        
+        /* 비동기 라우팅 대기 시간을 시각화하는 프로그레스 바(Progress Bar) 백그라운드 트랙 */
+        .loading-bar { width: 100%; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; }
+        
+        /* 실제 차오르는 진행률을 나타내는 인디케이터 게이지 (초기 width: 0%) */
+        .loading-progress { 
+            width: 0%; 
+            height: 100%; 
+            background: #0056b3; 
+            transition: width 1.5s linear; /* 1.5초간 등속(Linear)으로 너비가 팽창하는 보간 애니메이션 적용 */ 
         }
     </style>
 </head>
 <body>
+    <!-- 📱 중앙 정렬 및 반응형 사이즈 유지를 위한 앱 레이아웃 메인 컨테이너 -->
     <div class="main-container">
-        <i class="fa-solid fa-user-plus logo-icon"></i>
+        <i class="fa-solid fa-user-plus logo-icon"></i> <!-- 신규 유저 등록(User Plus)을 상징하는 시맨틱 아이콘 출력 -->
         <h1>회원가입</h1>
         <p>MAS의 새로운 가족이 되어주세요.</p>
 
+        <!-- 
+          * 💡 [비동기 폼 컨트롤 아키텍처] 
+          * - 전통적인 action/method 전송 속성을 의도적으로 배제하고 id="registerForm"을 부여하여, 
+          * 자바스크립트 DOM Event Listener가 폼 전송 권한을 100% 가로채어 제어(Intercept)하도록 비동기 설계 채택.
+        -->
         <form id="registerForm">
+            <!-- 시스템 내부 사용자 식별 및 로깅을 위한 본명(Real Name) 데이터 수집 블록 -->
             <div class="form-group">
                 <label for="username">이름</label>
                 <input type="text" id="username" name="username" class="form-control" required placeholder="실명을 입력하세요">
             </div>
+            
+            <!-- 시스템 인증(Authentication) 및 세션 식별 키로 활용될 논리적 계정 아이디(ID) 수집 블록 -->
             <div class="form-group">
                 <label for="loginId">아이디</label>
                 <input type="text" id="loginId" name="loginId" class="form-control" required placeholder="사용할 아이디를 입력하세요">
             </div>
+            
+            <!-- 데이터 기밀성(Confidentiality) 보장을 위한 마스킹 패스워드 수집 블록 -->
             <div class="form-group">
                 <label for="password">비밀번호</label>
                 <input type="password" id="password" name="password" class="form-control" required placeholder="비밀번호를 입력하세요">
             </div>
+            
+            <!-- 통계 도출 및 맞춤형 의료 가이드 AI 프롬프트 튜닝을 위한 연령 데이터 수집 (정수형 제한) -->
             <div class="form-group">
                 <label for="age">나이</label>
                 <input type="number" id="age" name="age" class="form-control" placeholder="예: 28">
             </div>
+            
+            <!-- 생물학적 성별 기반의 특정 질환(예: 부인과 질환 등) 분석 정확도 향상을 위한 열거형(Enum) 데이터 수집 -->
             <div class="form-group">
                 <label for="gender">성별</label>
                 <select id="gender" name="gender" class="form-control">
@@ -90,28 +137,45 @@
                     <option value="Female">여성</option>
                 </select>
             </div>
+            
+            <!-- 폼 검증(Validation) 완료 후 비동기 제출 이벤트를 브로드캐스팅하는 Submit 트리거 버튼 -->
             <button type="submit" class="btn btn-primary" style="margin-top: 15px;">가입하기</button>
         </form>
 
+        <!-- 기존 기가입 유저의 오진입 방지 및 네비게이션 복귀를 돕는 우회(Bypass) 라우팅 링크 바인딩 -->
         <a href="/login" class="link-text" style="margin-top: 15px; display: inline-block;">이미 계정이 있으신가요? 로그인</a>
     </div>
 
+    <!-- 
+      * [모달 컴포넌트 마크업] 백엔드 DB 적재(INSERT) 트랜잭션이 성공적으로 완료되었을 때만 
+      * 자바스크립트 DOM 제어 로직에 의해 화면 최상단에 렌더링되는 비동기 피드백 모달 컨테이너 
+    -->
     <div class="success-modal-overlay" id="successModal">
         <div class="success-modal">
             <i class="fa-solid fa-circle-check success-icon"></i>
             <h2>회원가입 성공!</h2>
+            <!-- 자바스크립트 DOM String 결합을 통해 가입자의 이름을 동적으로 주입(Injection)할 타깃 엘리먼트 -->
             <p id="welcomeMessage">환영합니다! 잠시 후 로그인 페이지로 이동합니다.</p>
             <div class="loading-bar">
+                <!-- 1.5초 JS 타이머에 맞춰 너비가 0%에서 100%로 팽창하는 CSS 게이지 트랙 -->
                 <div class="loading-progress" id="progressBar"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // 비동기(AJAX) 회원가입 요청 및 세련된 연출 로직
+        /**
+         * =================================================================================
+         * [클라이언트 비동기 통신(REST API) 및 상태 제어 자바스크립트 엔진]
+         * =================================================================================
+         */
+        
+        // 폼 DOM 노드에 'submit' 리스너를 바인딩하여, 버튼 클릭 시 발생하는 이벤트를 인터셉트(Intercept)함.
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
-            e.preventDefault(); // 기본 페이지 튕김 현상 방지
+            // 1. 이벤트 전파 및 브라우저의 폼 기본 동작(페이지 렌더링 튕김)을 강제 차단하여 SPA(Single Page App) 사용자 경험 유지
+            e.preventDefault(); 
 
+            // 2. 폼 내부의 입력 자원(Value)들을 추출하여 JSON 페이로드(Payload) 전송을 위한 자바스크립트 객체(DTO)로 래핑
             const formData = {
                 username: e.target.username.value,
                 loginId: e.target.loginId.value,
@@ -121,39 +185,43 @@
             };
 
             try {
+                // 3. 비동기 Fetch API를 활용하여 Node.js/Express 백엔드 컨트롤러(/api/register)로 POST HTTP 통신 수행
                 const response = await fetch('/api/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
+                    method: 'POST', // 리소스 자원 생성을 위한 POST 명시
+                    headers: { 'Content-Type': 'application/json' }, // MIME 타입을 JSON 규격으로 엄격히 선언하여 백엔드 파서 연동
+                    body: JSON.stringify(formData) // 메모리 상의 JS 객체를 네트워크 전송용 문자열로 직렬화(Serialization)
                 });
 
+                // 4. 서버사이드의 처리 결과(응답)를 JSON 포맷으로 역직렬화(Deserialization)하여 변수에 할당
                 const result = await response.json();
 
+                // 5. HTTP 상태 코드(Status Code)가 200번대(OK)로 정상 수신되었는지 무결성 분기 검증
                 if (response.ok) {
-                    // 1. 웰컴 메시지 텍스트 커스텀 설정
+                    // [성공 시퀀스 1] 백엔드 DB 적재 성공 시, 템플릿 리터럴(Template Literal)을 활용하여 유저 맞춤형 웰컴 메시지 동적 생성 및 DOM 주입
                     document.getElementById('welcomeMessage').innerText = `${formData.username}님 환영합니다! 잠시 후 로그인 화면으로 이동합니다.`;
                     
-                    // 2. 예쁜 모달 팝업창 짜잔 띄우기
+                    // [성공 시퀀스 2] 비동기 모달 컨테이너에 'active' 클래스를 주입하여 CSS 팝-인(Pop-in) 트랜지션 애니메이션 강제 트리거
                     const modal = document.getElementById('successModal');
                     modal.classList.add('active');
                     
-                    // 3. 하단 파란색 게이지 바가 스르륵 차오르는 시각 효과
+                    // [성공 시퀀스 3] 자바스크립트의 비동기 마이크로태스크 큐(Task Queue) 특성을 고려하여, 모달 렌더링 후 50ms 지연시킨 뒤 프로그레스 바 팽창 애니메이션 실행
                     setTimeout(() => {
                         document.getElementById('progressBar').style.width = '100%';
                     }, 50);
 
-                    // 4. 1.5초 뒤에 로그인 화면으로 자동 순간이동!
+                    // [성공 시퀀스 4] 프로그레스 바 애니메이션(1.5초)이 완벽히 종료된 시점인 1.6초(1600ms) 후 BOM(Browser Object Model)을 제어하여 로그인 라우터로 페이지 다이렉트 전환
                     setTimeout(() => {
                         location.href = '/login';
                     }, 1600);
                     
                 } else {
-                    // 실패했을 때는 에러 알림
+                    // [실패 시퀀스] DB 제약 조건(Unique Key 중복 등) 위배 시 백엔드가 반환한 에러 메시지(result.message)를 팝업 경고로 출력
                     alert(result.message || '회원가입 도중 에러가 발생했습니다.');
                 }
             } catch (error) {
-                console.error('통신 오류:', error);
-                alert('서버와 연결할 수 없습니다.');
+                // [네트워크 장애 대응] 서버 단절, 인터넷 끊김 등 최악의 통신 장애 발생 시 try-catch 블록을 통한 안전한 예외(Exception) 처리 구동
+                console.error('REST API 통신 아키텍처 오류 감지:', error);
+                alert('서버 네트워크와 연결할 수 없습니다. 백엔드 가동 상태를 확인하세요.');
             }
         });
     </script>

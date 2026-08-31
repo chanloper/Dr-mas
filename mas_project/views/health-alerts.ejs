@@ -1,3 +1,14 @@
+<!--
+ * =================================================================================
+ * [MAS: Medical Assistant System] 건강 알림(복약/측정) 설정 및 동기화 뷰 (health-alerts.ejs)
+ * 설계 목적:
+ * 1. 1인 가구 및 만성질환자의 규칙적인 복약(약 복용) 및 자가 측정(혈압, 혈당 등) 시간 관리 인프라 제공
+ * 2. 24시간 표기(ISO 8601형식) 입력 데이터를 사용자 친화적인 12시간 표기(오전/오후) 문자열 데이터로 정규화(Normalization)
+ * 3. EJS 엔진을 활용하여 MariaDB에 영구 적재된 알림 데이터 집합을 동적 루핑 제어하여 SSR(Server-Side Rendering) 방식으로 투사
+ * 4. CSS Grid/Flexbox 및 동적 스위치(Checkbox Slider) 컴포넌트를 이용한 유연한 반응형 UI 제공
+ * 학과 및 학년: 컴퓨터공학 / 소프트웨어 전공 3~4학년 종합설계(캡스톤 디자인) 레벨
+ * =================================================================================
+-->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -5,44 +16,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>건강 알림 설정</title>
     <style>
+        /* -------------------------------------------------------------------------
+         * [디자인 시스템] 모바일 반응형 프레임워크 및 컴포넌트 스타일링 가이드라인
+         * ------------------------------------------------------------------------- */
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; display: flex; justify-content: center; }
+        
+        /* 모바일 디바이스 가독성 및 이식성을 보장하는 500px 임계 최대폭 지정 */
         .container { width: 100%; max-width: 500px; background-color: white; min-height: 100vh; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .header { background-color: #0056b3; color: white; padding: 20px; text-align: center; font-size: 18px; font-weight: bold; position: relative; }
         .back-btn { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
         .content { padding: 20px; flex: 1; }
+        
+        /* 알림 설정 활성화 상태를 환기시키는 유저 인터랙티브 정보 카드 */
         .alert-box { background-color: #e0f2fe; color: #0369a1; padding: 15px; border-radius: 8px; font-size: 13px; margin-bottom: 25px; border-left: 5px solid #0ea5e9; }
         .form-box { background: #f1f3f9; padding: 15px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 13px; font-weight: bold; color: #4a5568; margin-bottom: 5px; }
         input[type="text"], input[type="time"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        
+        /* 퍼플 테마 계열로 디자인 정체성을 확립한 알림 등록 전용 버튼 */
         .btn-register { width: 100%; background-color: #6f42c1; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        
         .section-title { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 12px; border-bottom: 2px solid #6f42c1; padding-bottom: 5px; }
         .alert-list { display: flex; flex-direction: column; gap: 10px; }
         .alert-row { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        
         .alert-info h4 { margin: 0 0 5px 0; color: #333; font-size: 15px; }
         .alert-info p { margin: 0; font-size: 12px; color: #888; }
         .action-area { display: flex; align-items: center; gap: 15px; }
+        
+        /* -------------------------------------------------------------------------
+         * [하드웨어 에뮬레이션] 토글 슬라이더 스위치 CSS 스타일 구성 (동적 상태 변환)
+         * ------------------------------------------------------------------------- */
         .switch { position: relative; display: inline-block; width: 46px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
         .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        
+        /* 토글 활성화 및 둥근 버튼 슬라이딩 트랜지션 애니메이션 속성 구성 */
         input:checked + .slider { background-color: #6f42c1; }
         input:checked + .slider:before { transform: translateX(22px); }
+        
         .btn-delete { background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
         .empty-msg { text-align: center; color: #94a3b8; padding: 30px 0; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- 상단 라우팅 제어 및 내비게이션 바 -->
         <div class="header">
             <a href="/chat" class="back-btn">◀</a>
             건강 알림 설정
         </div>
+        
         <div class="content">
             <div class="alert-box">
                 🔔 <b>맞춤형 케어:</b> 설정하신 시간에 알림이 정상 제공됩니다.
             </div>
 
+            <!-- 신규 약어/복약 알림 데이터 추가 전송 컨트롤러 폼 -->
             <div class="form-box">
                 <div class="form-box-title" style="font-size: 14px; font-weight: bold; margin-bottom: 10px;">⏰ 새 건강 알림 추가</div>
                 <div class="form-group">
@@ -56,8 +88,14 @@
                 <button class="btn-register" onclick="addAlert()">알림 추가하기</button>
             </div>
 
+            <!-- 📌 동적 DB 연동 리스트 렌더링 구역 -->
             <div class="section-title">📅 현재 설정된 알림 목록 (진짜 DB 연동)</div>
+            
             <div id="alertList" class="alert-list">
+                <!-- 
+                  * 💡 [서버사이드 렌더링 데이터 보안 가드 구현]
+                  * 목적: 백엔드 MariaDB 조회 쿼리에서 null 또는 undefined 리스트가 바인딩 될 시 템플릿 컴파일 파괴 버그 사전 차단
+                -->
                 <% if (alerts && alerts.length > 0) { %>
                     <% alerts.forEach(function(item) { %>
                         <div class="alert-row">
@@ -65,8 +103,10 @@
                                 <h4>🔔 <%= item.name %></h4>
                                 <p>⏱️ 매일 <%= item.time %></p>
                             </div>
+                            <!-- 활성화 토글 스위치 제어 및 리소스 삭제 물리 버튼 구역 -->
                             <div class="action-area">
                                 <label class="switch">
+                                    <!-- DB 내부 데이터 플래그(is_active = 1 or 0) 조건 판별을 통한 인라인 활성화 바인딩 -->
                                     <input type="checkbox" <%= item.is_active ? 'checked' : '' %> onclick="alert('알림 토글이 반영되었습니다.')">
                                     <span class="slider"></span>
                                 </label>
@@ -77,39 +117,84 @@
                 <% } %>
             </div>
             
+            <!-- 빈(Empty) 상태 기계 분기 처리 (EJS 구문 매싱 최적화) -->
             <div id="emptyMsg" class="empty-msg" style="display: <%= (alerts && alerts.length > 0) ? 'none' : 'block' %>;">등록된 알림이 없습니다.</div>
         </div>
     </div>
 
     <script>
+        /**
+         * =================================================================================
+         * [클라이언트 비동기 통신(REST API) 컨트롤러 비즈니스 로직]
+         * =================================================================================
+         */
+
+        /**
+         * 설명: 건강 알림 비동기 등록 서비스 및 시간 정규화 포맷터
+         * 역할: 24시간 포맷('14:30')의 입력값을 '오후 02:30' 형태의 한국형 시간 규격 데이터로 정제 후 POST 통신 요청
+         */
         async function addAlert() {
             const name = document.getElementById('alertName').value.trim();
             const timeRaw = document.getElementById('alertTime').value;
+            
+            // [예외 방어 코드] 미입력 필드 감지를 통한 클라이언트 사이드 데이터 스크리닝
             if (!name || !timeRaw) return alert('모두 입력해 주세요!');
 
+            // -------------------------------------------------------------------------
+            // ⏱️ [정밀 설계] 24H -> 12H 오전/오후 시간 표기 정규화 변환 알고리즘
+            // -------------------------------------------------------------------------
             const [hour, minute] = timeRaw.split(':');
             const h = parseInt(hour, 10);
-            const ampm = h >= 12 ? '오후' : '오전';
+            
+            const ampm = h >= 12 ? '오후' : '오전'; // 삼항 연산자를 통한 자치 분기 판별
+            
+            // 24H 체계를 12H 체계로 보정 및 자정(00시)을 12시로 매핑 처리하는 비즈니스 룰
             const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+            
+            // 데이터베이스 일관성 유지를 위해 시(Hour) 정보에 두 자릿수 패딩(Padding) 가공
             const time = `${ampm} ${String(displayHour).padStart(2, '0')}:${minute}`;
 
-            const res = await fetch('/api/health-alerts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, time })
-            });
-            if (res.ok) {
-                alert('DB에 알림이 저장되었습니다!');
-                location.reload();
+            try {
+                // 비동기 fetch API 요청 발송 (JSON 페이로드 직렬화 바인딩)
+                const res = await fetch('/api/health-alerts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, time })
+                });
+
+                if (res.ok) {
+                    alert('DB에 알림이 저장되었습니다!');
+                    location.reload(); // 리소스 무결성 동기화를 위한 페이지 뷰 새로고침
+                } else {
+                    alert('알림을 등록하는 도중 오류가 발생했습니다.');
+                }
+            } catch (error) {
+                console.error("알림 등록 통신 에러:", error);
+                alert("네트워크 통신 장애가 발생했습니다. 백엔드 상태를 모니터링하세요.");
             }
         }
 
+        /**
+         * 설명: 특정 건강 알림 비동기 삭제 서비스
+         * 역할: 삭제 버튼 클릭 시 식별 키(id)를 바인딩하여 RESTful 규격의 DELETE 요청 트리거
+         * @param {string} id - MariaDB 내 health_alerts 테이블 고유 인덱스 ID 
+         */
         async function deleteAlert(id) {
             if (!confirm('이 알림을 삭제하시겠습니까?')) return;
-            const res = await fetch(`/api/health-alerts/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                alert('삭제 완료!');
-                location.reload();
+            
+            try {
+                // 시맨틱 웹 표준 규격을 준수하는 동적 주소 기반 DELETE API 매싱
+                const res = await fetch(`/api/health-alerts/${id}`, { method: 'DELETE' });
+                
+                if (res.ok) {
+                    alert('삭제 완료!');
+                    location.reload(); // 동적 리액션 반영을 위한 새로고침 처리
+                } else {
+                    alert('알림 삭제 처리에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error("알림 삭제 통신 에러:", error);
+                alert("삭제 처리 중 예기치 못한 네트워크 에러가 발생했습니다.");
             }
         }
     </script>

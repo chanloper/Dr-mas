@@ -1,31 +1,69 @@
+<!--
+ * =================================================================================
+ * [MAS: Medical Assistant System] 사용자 인증 로그인 인터페이스 (login.ejs)
+ * 설계 목적:
+ * 1. 시스템 인프라 보호 및 사용자 식별을 위한 안전한 로그인 채널 제공
+ * 2. 시맨틱 웹 표준 규격을 준수하는 <form> 기반 비즈니스 데이터 송신 인터페이스 구현
+ * 3. 클라이언트 사이드 일차 유효성 검증(Validation)을 통한 서버 트래픽 오버헤드 최적화
+ * 4. CSS 반응형 설계를 반영하여 기기 해상도(모바일, 태블릿, 데스크톱)에 유연하게 대응
+ * 학과 및 학년: 컴퓨터공학 / 소프트웨어 전공 3~4학년 종합설계(캡스톤 디자인) 레벨
+ * =================================================================================
+-->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+    <!-- 브라우저의 기본 인코딩 규격을 유니코드(UTF-8)로 선언하여 한글 깨짐 방지 -->
     <meta charset="UTF-8">
+    <!-- 모바일 장치에서의 레이아웃 배율 왜곡을 방지하기 위한 반응형 뷰포트 메타 태그 선언 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAS - 로그인</title>
+    
+    <!-- 🎨 외부 공통 퍼블리싱 스타일시트(/public/css/style.css) 동적 바인딩 -->
     <link rel="stylesheet" href="/css/style.css">
+    <!-- 벡터 아이콘 렌더링을 위한 폰트어썸(FontAwesome) 아이콘 라이브러리 CDN 연동 -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
+    <!-- 반응형 레이아웃 일관성 유지를 위한 고정형 카드형 메인 컨테이너 배치 -->
     <div class="main-container">
+        <!-- 🛡️ 보안 및 시스템 인증을 시각적으로 암시하는 방패 형상의 심볼릭 아이콘 투사 -->
         <i class="fa-solid fa-user-shield logo-icon"></i>
         <h1>로그인</h1>
         <p>MAS 계정으로 로그인해주세요.</p>
 
+        <!-- 
+          * 💡 [인증 및 데이터 송신 구조화]
+          * - action: 로그인 자격 증명(Credentials)을 서버사이드로 송신할 라우팅 엔드포인트 명시
+          * - method: 사용자의 패스워드를 쿼리 스트링에 노출하지 않고 HTTP 패킷 바디 영역에 적재하여 보호하는 POST 프로토콜 채택
+        -->
         <form action="/api/login" method="POST">
+            <!-- 사용자 아이디(ID) 입력 필드 랩핑 그룹 -->
             <div class="form-group">
+                <!-- accessibility(접근성) 향상을 위한 input 요소와 label 간의 id 바인딩 -->
                 <label for="loginId">아이디</label>
+                <!-- 
+                  * required: 빈 값(Empty) 전송으로 인한 불필요한 서버사이드 DB 쿼리 오버헤드를 막는 1차 방어막 속성
+                  * class="form-control": 통일된 인풋 UI/UX 렌더링을 위해 CSS 프레임워크 기반 컴포넌트 매핑
+                -->
                 <input type="text" id="loginId" name="loginId" class="form-control" required placeholder="아이디를 입력하세요">
             </div>
+            
+            <!-- 사용자 패스워드(Password) 입력 필드 랩핑 그룹 -->
             <div class="form-group">
                 <label for="password">비밀번호</label>
+                <!-- 
+                  * type="password": 사용자의 입력값을 아스테리스크(*) 또는 도트로 암호화 마스킹(Masking) 처리하는 보안 속성 
+                -->
                 <input type="password" id="password" name="password" class="form-control" required placeholder="비밀번호를 입력하세요">
             </div>
+            
+            <!-- 폼 내부 자원들의 동적 전송(Submit) 처리를 전담하는 시맨틱 버튼 배치 -->
             <button type="submit" class="btn btn-primary" style="margin-top: 10px;">로그인</button>
         </form>
 
+        <!-- 미가입 유저의 회원 이탈 방지 및 서비스 가입 동선 제공을 위한 앵커 링크 바인딩 -->
         <a href="/register" class="link-text">아직 계정이 없으신가요? 회원가입하기</a>
+        <!-- 메인 엔트리 포인트(루트 페이지)로 부드러운 상태 전환을 유도하는 내비게이션 아웃 링크 -->
         <a href="/" class="link-text">메인 화면으로 돌아가기</a>
     </div>
 </body>
