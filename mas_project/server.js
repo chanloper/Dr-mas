@@ -279,13 +279,6 @@ app.get('/manage-places', async (req, res) => {
         conn = await pool.getConnection();
         await conn.query("USE dr_mas_db");
         const places = await conn.query("SELECT * FROM favorite_places WHERE user_id = ?", [currentUserId]);
-<<<<<<< HEAD
-        res.render('manage-places', { 
-            user: req.session.user, 
-            places: places,
-            kakaoJsKey: process.env.KAKAO_JS_KEY 
-        });
-=======
         
         res.render('manage-places', { 
             user: req.session.user, 
@@ -293,7 +286,6 @@ app.get('/manage-places', async (req, res) => {
             kakaoKey: process.env.KAKAO_JS_KEY 
         }); 
 
->>>>>>> 5ce0348c4eff8342844eedc0ee6a799f49ef3fbd
     } catch (err) {
         console.error("병원/약국 조회 에러:", err);
         res.status(500).send("DB 조회 오류 발생");
