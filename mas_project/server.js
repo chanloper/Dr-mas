@@ -306,7 +306,6 @@ app.delete('/api/places/:id', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-<<<<<<< HEAD
         await conn.query("USE dr_mas_db");
         const places = await conn.query("SELECT * FROM favorite_places WHERE user_id = ?", [currentUserId]);
         
@@ -322,11 +321,6 @@ app.delete('/api/places/:id', async (req, res) => {
     } finally {
         if (conn) conn.release();
     }
-=======
-        await conn.query('DELETE FROM favorite_places WHERE id = ? AND user_id = ?', [req.params.id, req.session.user.userId]);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'DB 삭제 실패' }); } finally { if (conn) conn.release(); }
->>>>>>> 8aff27529d0c923a5f9b216783555a28de31bccb
 });
 
 // [CRUD API] 긴급 연락처 등록 및 삭제
@@ -464,3 +458,5 @@ app.listen(PORT, async () => {
     // 런타임 진입 직후 무결성을 보장하기 위한 데이터베이스 마이그레이션 호출
     await initDatabase(); 
 });
+
+
