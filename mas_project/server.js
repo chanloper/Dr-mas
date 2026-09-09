@@ -53,14 +53,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 // =================================================================================
 // 🗄️ [3] 데이터베이스 인프라: MariaDB 커넥션 풀 초기화
 // =================================================================================
-// 자원 누수를 막고 동시성(Concurrency)을 확보하기 위해 Pool 인스턴스 패턴 적용
 const pool = mariadb.createPool({
     host: process.env.DB_HOST || '127.0.0.1',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASS,
     database: 'dr_mas_db',
     port: 3306,
-    connectionLimit: 5, // 최대 동시 연결 수 제한을 통한 서버 부하 방지
+    connectionLimit: 5,
     allowPublicKeyRetrieval: true
 });
 
@@ -134,11 +133,9 @@ app.post('/api/register', async (req, res) => {
     let conn;
     try {
         conn = await pool.getConnection();
-        // 고유 식별 키(ID) 중복 스크리닝
         const rows = await conn.query('SELECT user_id FROM Users WHERE login_id = ?', [loginId]);
         if (rows.length > 0) return res.status(400).send('<script>alert("이미 존재하는 아이디입니다."); history.back();</script>');
 
-        // [보안] 10회의 Cost Factor를 가진 Bcrypt 해싱으로 평문 패스워드 완벽 치환
         const hashedPassword = await bcrypt.hash(password, 10);
         await conn.query(
             'INSERT INTO Users (login_id, password, username, age, gender) VALUES (?, ?, ?, ?, ?)',
@@ -163,11 +160,9 @@ app.post('/api/login', async (req, res) => {
         if (rows.length === 0) return res.status(400).send('<script>alert("아이디 또는 비밀번호가 일치하지 않습니다."); history.back();</script>');
 
         const user = rows[0];
-        // [보안] Bcrypt를 활용한 해시 페이로드 비교 연산 수행 (레인보우 테이블 공격 방어)
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).send('<script>alert("아이디 또는 비밀번호가 일치하지 않습니다."); history.back();</script>');
 
-        // 인증 통과 시 서버 인메모리에 유저 식별 객체(Session) 발급
         req.session.user = { userId: user.user_id, username: user.username };
         res.send(`<script>alert("${user.username}님 환영합니다!"); location.href="/chat";</script>`);
     } catch (err) {
@@ -181,18 +176,19 @@ app.post('/api/login', async (req, res) => {
 // [API] 지능형 의료 상담 채팅 (Streaming & 병렬 데이터 매싱 아키텍처)
 app.post('/api/chat', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '로그인이 필요합니다.' });
-
     const { symptomText, userLat, userLng } = req.body;
     const currentUserId = req.session.user.userId;
 
-    // [스트리밍 아키텍처] 청크(Chunk) 단위 전송을 위한 HTTP 응답 헤더 스펙 명시
+    if (!symptomText) {
+        return res.status(400).json({ success: false, error: '증상 내용을 입력해주세요.' });
+    }
+
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
         let localMedicalData = { hospitals: [], pharmacies: [] };
 
-        // [네트워크 성능 최적화] Promise.all() 기반 카카오 로컬 API 비동기 병렬 호출
         if (userLat && userLng) {
             try {
                 const KAKAO_KEY = process.env.KAKAO_REST_API_KEY;
@@ -208,28 +204,26 @@ app.post('/api/chat', async (req, res) => {
         }
 
         const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답해. [질환]에는 질환명만 짧게 적고, [가이드]에는 완화 팁과 함께 프롬프트로 전달된 [추천 병원]과 [추천 약국] 목록을 반드시 포함해서 안내해라."
-});
+            model: 'gemini-2.5-flash',
+            systemInstruction: "너는 지능형 의료 비서 'MAS'야. 반드시 [질환]과 [가이드]라는 두 가지 섹션으로 나누어 대답해. [질환]에는 질환명만 짧게 적고, [가이드]에는 완화 팁과 함께 프롬프트로 전달된 [추천 병원]과 [추천 약국] 목록을 반드시 포함해서 안내해라."
+        });
+
         const prompt = `
         [사용자 증상]: "${symptomText}"
         [추천 병원]: ${localMedicalData.hospitals.join(', ') || '없음'}
         [추천 약국]: ${localMedicalData.pharmacies.join(', ') || '없음'}
         `;
 
-        // LLM 스트림 인터페이스 호출 및 즉각적인 바이트 스트림 송신
         const resultStream = await model.generateContentStream(prompt);
         let aiFullText = '';
 
-        // 비동기 이터레이터(Async Iterator)를 통한 청크 실시간 파이프라이닝
         for await (const chunk of resultStream.stream) {
             const chunkText = chunk.text();
             aiFullText += chunkText;
-            res.write(chunkText); // 클라이언트 소켓으로 즉각 렌더링을 위해 전송
+            res.write(chunkText);
         }
-        res.end(); // HTTP 스트림 전송 종료 선언
+        res.end();
 
-        // [비동기 백그라운드 워커] 스트림 종료 후 사용자 지연 없이 백그라운드에서 DB 적재 수행
         (async () => {
             let conn;
             try {
@@ -249,15 +243,12 @@ app.post('/api/chat', async (req, res) => {
         })();
 
     } catch (err) {
-        if (err.status === 429) {
-            res.send('봇: 현재 사용자가 많아 AI가 숨을 고르고 있습니다. 1분 뒤에 다시 질문해 주세요!');
-        } else {
-            res.send('봇: 내부 서버 에러가 발생했습니다.');
-        }
+        console.error('채팅 처리 에러:', err);
+        res.send('봇: 내부 서버 에러가 발생했습니다.');
     }
 });
 
-// [CRUD API] 의료 기록 비동기 조회
+// [CRUD API] 의료 기록 조회
 app.post('/api/records', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '로그인이 필요합니다.' });
     let conn;
@@ -267,7 +258,7 @@ app.post('/api/records', async (req, res) => {
             "SELECT id, symptom_text, ai_predicted_disease, ai_guide, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as date FROM symptom_logs WHERE user_id = ? ORDER BY created_at DESC",
             [req.session.user.userId]
         );
-        res.json(rows);
+        res.json({ success: true, records: rows });
     } catch (err) {
         res.status(500).json({ error: '데이터베이스 조회 중 오류가 발생했습니다.' });
     } finally { if (conn) conn.release(); }
@@ -301,26 +292,15 @@ app.post('/api/places', async (req, res) => {
         res.json({ success: true, insertId: Number(result.insertId) });
     } catch (err) { res.status(500).json({ error: 'DB 저장 실패' }); } finally { if (conn) conn.release(); }
 });
+
 app.delete('/api/places/:id', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '로그인이 필요합니다.' });
     let conn;
     try {
         conn = await pool.getConnection();
-        await conn.query("USE dr_mas_db");
-        const places = await conn.query("SELECT * FROM favorite_places WHERE user_id = ?", [currentUserId]);
-        
-        res.render('manage-places', { 
-            user: req.session.user, 
-            places: places,
-            kakaoKey: process.env.KAKAO_JS_KEY 
-        }); 
-
-    } catch (err) {
-        console.error("병원/약국 조회 에러:", err);
-        res.status(500).send("DB 조회 오류 발생");
-    } finally {
-        if (conn) conn.release();
-    }
+        await conn.query('DELETE FROM favorite_places WHERE id = ? AND user_id = ?', [req.params.id, req.session.user.userId]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'DB 삭제 실패' }); } finally { if (conn) conn.release(); }
 });
 
 // [CRUD API] 긴급 연락처 등록 및 삭제
@@ -334,6 +314,7 @@ app.post('/api/emergency-contact', async (req, res) => {
         res.json({ success: true, insertId: Number(result.insertId) });
     } catch (err) { res.status(500).json({ error: 'DB 저장 실패' }); } finally { if (conn) conn.release(); }
 });
+
 app.delete('/api/emergency-contact/:id', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '로그인이 필요합니다.' });
     let conn;
@@ -375,6 +356,7 @@ app.post('/api/health-alerts', async (req, res) => {
         res.json({ success: true, insertId: Number(result.insertId) });
     } catch (err) { res.status(500).json({ error: 'DB 저장 실패' }); } finally { if (conn) conn.release(); }
 });
+
 app.delete('/api/health-alerts/:id', async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '로그인이 필요합니다.' });
     let conn;
@@ -385,13 +367,12 @@ app.delete('/api/health-alerts/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'DB 삭제 실패' }); } finally { if (conn) conn.release(); }
 });
 
-// [Vision AI API] 멀티모달 처방전/약 봉지 이미지 분석 (Multer Multipart/form-data 연동)
+// [Vision AI API] 멀티모달 처방전/약 봉지 이미지 분석
 app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '로그인이 필요합니다.' });
     if (!req.file) return res.status(400).json({ error: '사진 파일이 전송되지 않았습니다.' });
 
     try {
-        // 클라이언트로부터 버퍼 형태로 수신된 이진(Binary) 이미지 파일을 Base64 포맷으로 인코딩
         const imagePart = {
             inlineData: {
                 data: req.file.buffer.toString('base64'),
@@ -419,27 +400,22 @@ app.post('/api/analyze-prescription', upload.single('prescriptionImage'), async 
 });
 
 // =================================================================================
-// 🛠️ [6] 클라우드 데이터베이스 초기화 및 자동 마이그레이션 모듈
+// 🛠️ [6] 데이터베이스 초기화 및 자동 마이그레이션 모듈
 // =================================================================================
 async function initDatabase() {
     let conn;
     try {
         conn = await pool.getConnection();
-        // 1. 시스템 데이터베이스 생성 및 선택
         await conn.query('CREATE DATABASE IF NOT EXISTS dr_mas_db');
         await conn.query('USE dr_mas_db');
 
-        // 2. 핵심 엔티티 릴레이션(Table) 자동 DDL 스키마 빌드 (IF NOT EXISTS로 데이터 보존)
-        await conn.query(`CREATE TABLE IF NOT EXISTS Users (user_id INT AUTO_INCREMENT PRIMARY KEY, login_id VARCHAR(50) NOT NULL UNIQUE, password VARCHAR(255) NOT NULL, username VARCHAR(100) NOT NULL, age INT, gender VARCHAR(10), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+        await conn.query(`CREATE TABLE IF NOT EXISTS Users (user_id INT AUTO_INCREMENT PRIMARY KEY, login_id VARCHAR(50) NOT NULL UNIQUE, password VARCHAR(255) NOT NULL, username VARCHAR(100) NOT NULL, age INT, gender VARCHAR(20), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         await conn.query(`CREATE TABLE IF NOT EXISTS symptom_logs (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, symptom_text TEXT NOT NULL, ai_predicted_disease VARCHAR(255), ai_guide TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
         await conn.query(`CREATE TABLE IF NOT EXISTS emergency_contacts (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, name VARCHAR(100) NOT NULL, phone VARCHAR(50) NOT NULL)`);
         await conn.query(`CREATE TABLE IF NOT EXISTS health_alerts (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, name VARCHAR(255) NOT NULL, time VARCHAR(50) NOT NULL, is_active TINYINT(1) DEFAULT 0)`);
         await conn.query(`CREATE TABLE IF NOT EXISTS favorite_places (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, type VARCHAR(50) NOT NULL, name VARCHAR(100) NOT NULL, address VARCHAR(255), phone VARCHAR(50), memo TEXT)`);
 
-        // 컬럼 추가 마이그레이션 예외 래핑 (이미 존재할 시 무시)
         try { await conn.query('ALTER TABLE favorite_places ADD COLUMN memo TEXT'); } catch (e) {}
-
-        await conn.query(`CREATE TABLE IF NOT EXISTS user_settings (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL UNIQUE, voice_enabled TINYINT(1) DEFAULT 1)`);
 
         console.log('✅ [DB 마이그레이션] MariaDB DDL 스키마 런타임 동기화 완료!');
     } catch (err) {
@@ -455,8 +431,5 @@ async function initDatabase() {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`🚀 MAS 통합 백엔드 오케스트레이션 서버가 ${PORT}번 포트에서 가동 중입니다.`);
-    // 런타임 진입 직후 무결성을 보장하기 위한 데이터베이스 마이그레이션 호출
     await initDatabase(); 
 });
-
-
