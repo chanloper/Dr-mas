@@ -1,13 +1,6 @@
 <!--
  * =================================================================================
  * [MAS: Medical Assistant System] 하이브리드 AI 대화 및 스마트 헬스케어 메인 뷰 (chat.ejs)
- * 설계 및 엔지니어링 목적:
- * 1. [스트리밍 통신] ReadableStream 및 TextDecoder를 활용한 청크(Chunk) 단위 비동기 텍스트 렌더링
- * 2. [음성 인터페이스] Web Speech API (STT/TTS) 연동을 통한 배리어 프리(Barrier-Free) UX/UI 구현
- * 3. [LBS 연동] HTML5 Geolocation API 기반의 저레이턴시 위·경도(LatLng) 좌표 파싱 및 병원 매싱
- * 4. [비전 AI 연동] FormData 기반 멀티파트(Multipart) 이미지 바이너리 데이터 비동기 송신 
- * 5. [SPA 아키텍처] 페이지 리로드 없는 클라이언트 사이드 라우팅(Client-side Routing) 기반 탭 전환
- * 학과 및 학년: 컴퓨터공학 / 소프트웨어 전공 3~4학년 종합설계(캡스톤 디자인) 기말 제출 규격
  * =================================================================================
 -->
 <!DOCTYPE html>
@@ -16,38 +9,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAS AI Assistant</title>
-    <!-- 외부 벡터 아이콘 렌더링을 위한 FontAwesome 패키지 CDN 연동 -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* -------------------------------------------------------------------------
-         * [디자인 시스템] 반응형 웹 및 앱 뷰포트 최적화 CSS 가이드라인
-         * ------------------------------------------------------------------------- */
         * { box-sizing: border-box; font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; }
         body { background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; height: 100vh; }
-        
-        /* 모바일 디바이스 물리 크기에 맞춘 단일 앱 컨테이너 프레임 배치 */
         .app-container { width: 100%; max-width: 450px; background: white; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; position: relative; padding-bottom: 60px; }
         .header { background: #0056b3; color: white; padding: 20px; text-align: center; font-size: 1.2rem; font-weight: bold; }
         .header span { font-size: 0.9rem; font-weight: normal; opacity: 0.8; display: block; margin-top: 5px; }
-        
-        /* 스크롤 영역 격리 및 Flexbox 기반의 가변 뷰포트 구성 */
         .tab-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; height: 100%; }
         .chat-window { flex: 1; padding: 20px; background-color: #f4f7f6; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
-        
-        /* [UI/UX] 사용자 및 AI 상담 말풍선 대조 가시성 극대화 및 비대칭 Radius 적용 */
         .msg { max-width: 85%; padding: 12px 16px; border-radius: 15px; font-size: 0.95rem; line-height: 1.5; word-wrap: break-word; }
         .msg.user { align-self: flex-end; background: #007bff; color: white; border-bottom-right-radius: 2px; }
         .msg.ai { align-self: flex-start; background: white; color: #333; border: 1px solid #e1e4e8; border-bottom-left-radius: 2px; }
-        
-        /* 의심 질환 시맨틱 구분을 위한 가시성 높은 전용 강조 배지 */
         .badge { display: inline-block; background: #ffebee; color: #c62828; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: bold; margin: 2px 4px 2px 0; }
-        
-        /* 입력 컴포넌트 하단 고정 레이아웃 */
         .input-area { display: flex; padding: 15px; background: white; border-top: 1px solid #eee; align-items: center; }
         .input-area input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; margin-right: 10px; }
         .input-area button.send-btn { padding: 10px 20px; background: #0056b3; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; }
-        
-        /* 마이페이지 탭 정보 관리 카드 디자인 및 아코디언 박스 */
         .mypage-wrap { padding: 20px; background: #fff; }
         .profile-card { text-align: center; padding: 20px 0; border-bottom: 1px solid #eee; }
         .profile-pic { width: 80px; height: 80px; background: #e9ecef; border-radius: 50%; display: inline-block; line-height: 80px; font-size: 2rem; margin-bottom: 10px; }
@@ -55,23 +32,16 @@
         .menu-list li { padding: 15px 10px; border-bottom: 1px solid #f1f1f1; font-size: 1.05rem; cursor: pointer; color: #333; display: flex; justify-content: space-between; align-items: center; }
         .menu-list li:hover { background: #f8f9fa; }
         .menu-list li::after { content: '>'; color: #ccc; font-weight: bold; }
-        
-        /* 의료기록 비동기 조회를 위한 동적 컨테이너 */
         .records-container { display: none; padding: 15px; background: #f8fafc; border-radius: 10px; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; }
         .record-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; cursor: pointer; transition: background-color 0.2s; }
         .record-item:hover { background-color: #e2e8f0; border-radius: 8px; padding-left: 10px; } 
-        .record-item:last-child { border-bottom: none; }
         .record-date { color: #888; font-size: 0.8rem; margin-bottom: 4px; }
         .record-symptom { font-weight: bold; color: #333; }
         .record-disease { color: #c62828; margin-top: 2px; }
-
-        /* 💡 [레이아웃 간섭 제어] 하단 네비게이션 고정 배치 및 CSS 레이어 z-index 최상위 설정 */
         .bottom-nav { position: absolute; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; z-index: 999; }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
         .nav-item.active { color: #0056b3; font-weight: bold; }
         .nav-icon { font-size: 1.3rem; margin-bottom: 2px; }
-        
-        /* 상세 의료 분석 리포트 모달 투사 레이어 (z-index 100 할당) */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
         .modal-content { background: white; width: 90%; max-width: 400px; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-height: 80vh; display: flex; flex-direction: column; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
@@ -89,7 +59,7 @@
     </div>
     
     <!-- [구역 1] 비동기 AI 상담 채팅 탭 화면 컴포넌트 -->
-    <div id="view-chat" class="tab-content" style="display: none;">
+    <div id="view-chat" class="tab-content">
         <div class="chat-window" id="chat-window">
             <div class="msg ai">
                 안녕하세요! MAS입니다. 😊<br>어디가 불편하신지 말씀해 주시면 든든한 동반자가 되어 드릴게요.
@@ -98,18 +68,16 @@
         
         <!-- 대화 입력 폼 컨테이너 -->
         <div class="input-area">
-            <!-- STT(음성 인식) 구동을 위한 마이크 트리거 버튼 -->
             <button id="micBtn" type="button" onclick="startSpeechRecognition()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #10b981; margin-right: 10px;">
                 <i class="fa-solid fa-microphone"></i>
             </button>
-
-
             <input type="text" id="symptom" placeholder="증상을 입력하세요 (예: 머리가 아파요)" onkeypress="if(event.key === 'Enter') sendChat()">
-          
+            <button class="send-btn" onclick="sendChat()">전송</button>
+        </div>
     </div>
 
     <!-- [구역 2] 마이페이지 기능 및 스마트 케어 인프라 제어 영역 -->
-    <div id="view-mypage" class="tab-content">
+    <div id="view-mypage" class="tab-content" style="display: none;">
         <div class="mypage-wrap">
             <div class="profile-card">
                 <div class="profile-pic">👤</div>
@@ -117,7 +85,6 @@
                 <p style="color: #666; font-size: 0.9rem; margin-top: 5px;">1인 가구 케어 모드 활성화 중</p>
             </div>
             
-            <!-- 라우팅 및 기능 제어 네비게이션 리스트 -->
             <ul class="menu-list">
                 <li onclick="toggleMedicalRecords()">나의 의료 기록 확인</li>
                 <div id="records-box" class="records-container">
@@ -130,18 +97,13 @@
                 <li onclick="location.href='/logout'">🚪 로그아웃</li>
             </ul>
             
-            <!-- 📸 [Vision AI 컴포넌트] 처방전 이미지 분석 카드 UI 레이아웃 -->
             <div style="margin-top: 25px; background: #f0fdf4; border: 1px dashed #22c55e; border-radius: 12px; padding: 15px;">
                 <h4 style="color: #16a34a; margin-bottom: 8px; font-size: 14px;">📸 MAS AI 처방전/약 봉지 스캔</h4>
                 <p style="font-size: 11px; color: #666; margin-bottom: 12px;">처방전이나 약 봉지 사진을 올리면 AI가 즉시 분석해 줍니다.</p>
-        
-                <!-- 파일 I/O 및 멀티파트 전송 트리거 영역 -->
                 <div style="display: flex; gap: 5px;">
-                    <!-- accept 속성을 부여하여 모바일 디바이스에서 카메라 및 갤러리 앱 직접 연동 허용 -->
                     <input type="file" id="prescriptionFile" accept="image/*" style="font-size: 12px; flex: 1;">
                     <button onclick="uploadAndAnalyzeImage()" style="background: #22c55e; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;">분석 시작</button>
                 </div>
-
                 <div id="aiLoading" style="display: none; font-size: 12px; color: #16a34a; font-weight: bold; margin-top: 10px; text-align: center;">🔄 AI가 사진 속 글자를 분석 중입니다...</div>
                 <div id="analysisResult" style="display: none; margin-top: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.6; color: #333; max-height: 200px; overflow-y: auto; white-space: pre-wrap;"></div>
             </div>
@@ -153,7 +115,6 @@
         <div class="nav-item active" id="nav-chat" onclick="switchTab('chat')">
             <div class="nav-icon">💬</div>상담하기
         </div>
-        <!-- 응급 상황 대응 로직 트리거 -->
         <div class="nav-item" style="color: #ef4444;" onclick="triggerSOS()">
             <div class="nav-icon">🚨</div>SOS 호출
         </div>
@@ -163,7 +124,6 @@
     </div>
 </div>
 
-<!-- 상세 예방가이드 오버레이 팝업용 동적 모달 창 구조체 -->
 <div id="record-modal" class="modal-overlay" onclick="closeModalOnBgClick(event)">
     <div class="modal-content">
         <div class="modal-header">
@@ -175,29 +135,15 @@
 </div>
 
 <script>
-    /**
-     * =================================================================================
-     * [프론트엔드 비동기 제어 자바스크립트 엔진]
-     * =================================================================================
-     */
-    
-    /**
-     * 설명: SPA(Single Page Application) 구조의 탭 스위칭 라우터
-     * 역할: 페이지 리로드(Reload) 없이 DOM 요소의 CSS display 속성을 동적으로 스와핑하여 부드러운 전환 경험 제공
-     */
     function switchTab(tabName) {
-        // 기존 뷰 마스킹 처리
         document.getElementById('view-chat').style.display = 'none';
         document.getElementById('view-mypage').style.display = 'none';
         document.getElementById('nav-chat').classList.remove('active');
         document.getElementById('nav-mypage').classList.remove('active');
-        
-        // 타깃 뷰 활성화 및 하이라이트 매핑
         document.getElementById('view-' + tabName).style.display = 'flex';
         document.getElementById('nav-' + tabName).classList.add('active');
     }
 
-    // 모달 활성화 및 AI 데이터의 이스케이프 개행 문자(\n)를 HTML 태그(<br>)로 동적 파싱 렌더링
     function openRecordModal(guideText) {
         const modal = document.getElementById('record-modal');
         const modalBody = document.getElementById('modal-body');
@@ -208,10 +154,6 @@
     function closeRecordModal() { document.getElementById('record-modal').style.display = 'none'; }
     function closeModalOnBgClick(event) { if (event.target.id === 'record-modal') closeRecordModal(); }
 
-    /**
-     * 설명: [DB 연동 Fetch] 사용자의 과거 증상기록 비동기 파싱
-     * 역할: 백엔드로부터 전달된 JSON 객체 배열을 순회하여 동적 DOM 카드로 컴파일 및 DOM 트리에 주입
-     */
     async function toggleMedicalRecords() {
         const recordsBox = document.getElementById('records-box');
         if (recordsBox.style.display === 'block') {
@@ -224,13 +166,12 @@
             const data = await response.json();
             recordsBox.innerHTML = ''; 
 
-            if (data.length === 0) {
+            if (!data.records || data.records.length === 0) {
                 recordsBox.innerHTML = '<p style="text-align:center; color:#888; font-size:0.9rem;">분석된 의료 기록이 없습니다.</p>';
                 return;
             }
 
-            // 동적 템플릿 스트링을 통한 카드 컴포넌트 실시간 마운트 및 클로저(Closure) 스코프 리스너 연결
-            data.forEach(item => {
+            data.records.forEach(item => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'record-item';
                 itemDiv.dataset.guide = item.ai_guide; 
@@ -253,71 +194,54 @@
     const chatWindow = document.getElementById('chat-window');
     const symptomInput = document.getElementById('symptom');
 
-    // 채팅 타임라인 메시지 렌더링 및 자동 하단 스크롤 동기화 옵저버 함수
     function appendMessage(sender, text, isAiResult = false) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ${sender}`;
         if (isAiResult) msgDiv.innerHTML = text;
         else msgDiv.innerText = text;
         chatWindow.appendChild(msgDiv);
-        chatWindow.scrollTop = chatWindow.scrollHeight; // DOM 렌더링 직후 최하단 스크롤 강제 동기화
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
-    /**
-     * 설명: [Geolocation API] 자치 유저 추적 및 브라우저 하드웨어 센서 위경도 매싱 기술
-     * 설계 목적: Promise 패턴으로 래핑하여 비동기 블로킹을 방지하고, 3초 타임아웃 룰을 부여해 배터리 리소스 낭비 제어
-     */
     function getFastLocation() {
         return new Promise((resolve) => {
             if (!navigator.geolocation) return resolve({ lat: null, lng: null });
             navigator.geolocation.getCurrentPosition(
                 (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
                 (err) => resolve({ lat: null, lng: null }),
-                { enableHighAccuracy: false, timeout: 3000, maximumAge: 600000 } // 레이턴시 최소화를 위한 하드웨어 캐시 옵션
+                { enableHighAccuracy: false, timeout: 3000, maximumAge: 600000 }
             );
         });
     }
 
     let cachedLocation = null;
-    // 초기 렌더링 시 백그라운드 GPS 선적재(Pre-loading) 알고리즘 가동
     window.addEventListener('DOMContentLoaded', async () => {
         try { cachedLocation = await getFastLocation(); } catch (e) {} 
     });
 
-    /**
-     * =================================================================================
-     * 🎙️ 고급 하이브리드 음성 비서 모듈 (Web Speech API 연동 - STT & TTS)
-     * =================================================================================
-     */
-    let isVoiceMode = false; // 음성 자동 모드 플래그 (TTS 발화 트리거 여부 판별)
-    let isRecording = false;
+    let isVoiceMode = false;
     let recognition;
 
-    // 1. 음성 인식 (STT, Speech-To-Text) 인스턴스화 및 벤더 접두사(Webkit) 크로스 브라우징 처리
     function startSpeechRecognition() {
         const SpeechApi = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechApi) return alert("현재 브라우저는 Web Speech API를 지원하지 않습니다.");
 
         recognition = new SpeechApi();
         recognition.lang = 'ko-KR'; 
-        recognition.interimResults = false; // 중간 조각 파싱 비활성화를 통한 자연어 정확도 가중 처리
-
+        recognition.interimResults = false;
         const micBtn = document.getElementById('micBtn');
 
-        // 하드웨어 마이크 권한 획득 및 캡처 시작 시 콜백
         recognition.onstart = function() {
             micBtn.style.color = '#ef4444'; 
-            symptomInput.placeholder = "듣고 있습니다... (종료하려면 🛑 클릭)"; 
+            symptomInput.placeholder = "듣고 있습니다..."; 
         };
 
-        // 음성을 텍스트 스트링으로 성공적 디코딩 완료 시 콜백
         recognition.onresult = function(event) {
-            symptomInput.value = event.results[0][0].transcript; // 1순위 추론 스트링 바인딩
-            isVoiceMode = true; // 응답 수신 시 소리내어 대답할 TTS 플래그 가동
-            sendChat(); // 전송 비동기 함수 직접 연동 트리거
+            symptomInput.value = event.results[0][0].transcript;
+            isVoiceMode = true;
+            sendChat();
         };
 
-        // 발화 종료 및 마이크 채널 닫힘 콜백
         recognition.onspeechend = function() {
             recognition.stop();
             micBtn.style.color = '#10b981'; 
@@ -325,25 +249,18 @@
         };
         
         recognition.onerror = (event) => console.error("음성 인식 에러:", event.error);
-        recognition.start(); // 마이크 하드웨어 제어권 탈취 및 캡처 시작
+        recognition.start();
     }
 
-    // 3. 브라우저 합성 음성 재생 (TTS, Text-To-Speech) 가동 모듈
     function speakAIResponse(text) {
         if (!window.speechSynthesis) return;
-        // 생성형 AI 특유의 불필요한 마크다운 특수문자(*, #)를 정규식으로 안전하게 절삭하여 가독성 증대
         const cleanText = text.replace(/[*#]/g, ''); 
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'ko-KR'; 
-        utterance.rate = 1.1; // 한국어 청취 최적화 배속 스펙 셋업
-        window.speechSynthesis.speak(utterance); // 오디오 출력 하드웨어 파이프라인으로 전송
+        utterance.rate = 1.1;
+        window.speechSynthesis.speak(utterance);
     }
 
-    /**
-     * =================================================================================
-     * ✉️ [비동기 네트워크 스트림] Express 백엔드 통신 및 데이터 융합 동기화
-     * =================================================================================
-     */
     async function sendChat() {
         const symptomText = symptomInput.value.trim();
         if(!symptomText) return alert("증상을 입력해주세요!");
@@ -358,7 +275,6 @@
         chatWindow.scrollTop = chatWindow.scrollHeight;
 
         try {
-            // 위치 기반 병원 매칭을 위한 선행 GPS 데이터 병합 송신
             let userLoc = cachedLocation || await getFastLocation(); 
             const response = await fetch('/api/chat', {
                 method: 'POST',
@@ -366,18 +282,14 @@
                 body: JSON.stringify({ symptomText: symptomText, userLat: userLoc.lat, userLng: userLoc.lng })
             });
             
-            // 💡 [고급 아키텍처 수립] Response Body의 저수준 Reader 스트림 버퍼 직접 획득 가동
-            // 사유: 생성형 AI의 긴 응답 대기 시간을 해소하고, 데이터가 도착하는 즉시 타이핑 치듯 렌더링하기 위함
             const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8"); // 바이트 어레이 스트림 디코더 래핑
+            const decoder = new TextDecoder("utf-8");
             let fullText = "";
             msgDiv.innerHTML = "";
 
-            // ReadableStream의 chunk 단위 루프 비동기 소비
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) {
-                    // 데이터 스트리밍이 완전히 끝나면 TTS(음성 가이드) 조건절 실행
                     if (isVoiceMode) {
                         speakAIResponse(fullText);
                         isVoiceMode = false;
@@ -385,10 +297,7 @@
                     break; 
                 }
                 
-                // 바이트 단위 스트림을 문자열로 합산 디코딩
                 fullText += decoder.decode(value, { stream: true });
-                
-                // 프론트엔드 배지 교환 및 개행 문자 정규식 동적 컴파일 파싱 실시간 렌더링
                 msgDiv.innerHTML = fullText
                     .replace(/\[질환\]/g, '<span class="badge">🩺 예상 질환:</span> ')
                     .replace(/\[가이드\]/g, '<br><br><strong>💡 가이드</strong><br>')
@@ -400,7 +309,6 @@
         }
     }
 
-    // 의료 상담 로그 비동기 삭제 요청 처리
     async function deleteRecord(recordId) {
         if (!confirm("정말로 이 기록을 삭제하시겠습니까?")) return;
         try {
@@ -413,10 +321,6 @@
         } catch (error) { alert("서버 통신에 실패했습니다."); }
     }
 
-    /**
-     * 설명: [Vision AI API] FormData 비동기 처리를 통한 이진 파일 메모리 버퍼 송신 제어
-     * 역할: 로컬에 존재하는 처방전 이미지 객체를 캡처하여 Content-Type을 multipart/form-data로 인코딩 전송
-     */
     async function uploadAndAnalyzeImage() {
         const fileInput = document.getElementById('prescriptionFile');
         const loadingDiv = document.getElementById('aiLoading');
@@ -427,7 +331,6 @@
         loadingDiv.style.display = 'block';
         resultDiv.style.display = 'none';
         
-        // 멀티파트 형식으로 바이너리 파일 데이터를 폼 엔벨로프로 래핑
         const formData = new FormData();
         formData.append('prescriptionImage', fileInput.files[0]);
 
@@ -442,7 +345,6 @@
         } catch (error) { alert('서버와 연결할 수 없습니다.'); } finally { loadingDiv.style.display = 'none'; }
     }
 
-    // 🚨 1인 가구 비상 대비 보호자 SOS 비동기 네트워크 트리거
     async function triggerSOS() {
         if (!confirm("🚨 긴급 상황입니까? 등록된 보호자에게 SOS 알림을 전송합니다.")) return;
 
