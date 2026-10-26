@@ -1,5 +1,6 @@
-import { Stack } from "expo-router";
+import { Stack } from 'expo-router';
 
+/** Dr.MAS uses its own bottom navigation inside src/app/index.tsx during this UI phase. */
 export default function RootLayout() {
-  return <Stack />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
