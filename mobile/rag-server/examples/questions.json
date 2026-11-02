@@ -1,0 +1,50 @@
+﻿[
+    {
+        "question":  "가상질환알파",
+        "expectedDocumentIds":  [
+                                    "synthetic-0"
+                                ]
+    },
+    {
+        "question":  "가상성분베타",
+        "expectedDocumentIds":  [
+                                    "synthetic-1"
+                                ]
+    },
+    {
+        "question":  "가상복약감마",
+        "expectedDocumentIds":  [
+                                    "synthetic-2"
+                                ]
+    },
+    {
+        "question":  "가상수면델타",
+        "expectedDocumentIds":  [
+                                    "synthetic-3"
+                                ]
+    },
+    {
+        "question":  "가상돌봄엡실론",
+        "expectedDocumentIds":  [
+                                    "synthetic-4"
+                                ]
+    },
+    {
+        "question":  "은하수우주선",
+        "expectedDocumentIds":  [
+
+                                ]
+    },
+    {
+        "question":  "미확인성분오메가",
+        "expectedDocumentIds":  [
+
+                                ]
+    },
+    {
+        "question":  "블랙홀망원경",
+        "expectedDocumentIds":  [
+
+                                ]
+    }
+]

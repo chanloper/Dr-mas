@@ -1,0 +1,511 @@
+{
+  "mode": "mock",
+  "scoresAreScripted": true,
+  "actualApiCalls": 0,
+  "documents": [
+    {
+      "id": "sleep-light",
+      "title": "수면 환경 조명",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/sleep-light",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "야간 취침 침실 조명 조절 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "92db2f68d62d03d50c2d65371985fbf9ad28b7fef197296cefacf3a12a0b73b8"
+    },
+    {
+      "id": "sleep-sound",
+      "title": "수면 환경 소음",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/sleep-sound",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "야간 취침 침실 소음 차단 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "6650336681e06580153be67ffc6e5625ac033b314e73a8d93fab50d725a43f80"
+    },
+    {
+      "id": "sleep-stats",
+      "title": "수면 통계",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/sleep-stats",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "야간 수면 시간 표본 통계 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "b049440a95746c03135862288566ae8e0106620aa5ee00f7e19cd39a251c580a"
+    },
+    {
+      "id": "walk-log",
+      "title": "보행 기록",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/walk-log",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "걷기 보행 일정 활동 기록 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "99b5e8be105e14664b5fba50e2a01b391925a7f771952dae310fa5ea3dfd9540"
+    },
+    {
+      "id": "walk-pace",
+      "title": "보행 강도",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/walk-pace",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "걷기 보행 속도 운동 강도 기록 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "86393b0e8114ed9e3e33afa275a2a8d43ccff14f1370bae550279198ba932856"
+    },
+    {
+      "id": "sport-history",
+      "title": "운동 역사",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/sport-history",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "신체 운동 스포츠 역사 연표 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "666f19e64473f6b0d453c70bcd5a809a9b00da4645504bab0adffb250f4b90ce"
+    },
+    {
+      "id": "drug-label",
+      "title": "약품 포장",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/drug-label",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "의약품 포장 유효기한 표시 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "24fa6c908d7c1f6ab5bbf7511dac29e4620fa40181e95bb51d0a8b5096a2e46b"
+    },
+    {
+      "id": "drug-storage",
+      "title": "약품 보관",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/drug-storage",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "의약품 포장 보관 온도 표시 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "ea392b3f32b8e1d18d4c220c8fcb8a893d527511f02f79f5bf3507fdf94e5782"
+    },
+    {
+      "id": "drug-sales",
+      "title": "약품 통계",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/drug-sales",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "의약품 시장 판매 통계 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "23e964e811def76e6620274bc71047bfca3732661e9e053b564a8c0ac230dcf1"
+    },
+    {
+      "id": "astronomy",
+      "title": "천문 자료",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/astronomy",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "은하 별자리 관측 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "f13b50bed10da724aa47e7b1608f546afadfe97556dfdd2a25991dc359311052"
+    },
+    {
+      "id": "music",
+      "title": "음악 자료",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/music",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "피아노 악보 박자 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "62d2fa16345f81f193ae38595ece35320e1b9adddad510de0dfe52c9ecfda5f7"
+    },
+    {
+      "id": "travel",
+      "title": "관광 자료",
+      "publisher": "SYNTHETIC ONLY",
+      "sourceUrl": "https://example.org/quality/travel",
+      "publishedAt": null,
+      "updatedAt": "2026-11-02",
+      "collectedAt": "2026-11-02",
+      "category": "lifestyle",
+      "content": "기차 노선 관광 지도 항목. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.",
+      "rights": {
+        "terms": "Authored synthetic evaluation only",
+        "permission": "test-only",
+        "checkedAt": "2026-11-02"
+      },
+      "version": 1,
+      "contentHash": "952bd121d9df5d5fa6ddb9f1a1748bfc6947e7bdfb230fdd64034d9ea8ed69eb"
+    }
+  ],
+  "cases": [
+    {
+      "id": "cal-sleep",
+      "split": "calibration",
+      "question": "잠자리 불빛과 시끄러움 항목",
+      "facets": [
+        [
+          "수면",
+          "취침"
+        ],
+        [
+          "조명",
+          "소음"
+        ]
+      ],
+      "relevantDocumentIds": [
+        "sleep-light",
+        "sleep-sound"
+      ],
+      "nearMissIds": [
+        "sleep-stats"
+      ],
+      "scores": {
+        "sleep-stats": 0.78,
+        "sleep-light": 0.73,
+        "sleep-sound": 0.71
+      },
+      "unrelatedDocumentIds": [
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "drug-label",
+        "drug-storage",
+        "drug-sales",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "cal-drug",
+      "split": "calibration",
+      "question": "약 상자의 날짜와 온도 항목",
+      "facets": [
+        [
+          "약품",
+          "의약품"
+        ],
+        [
+          "유효기한",
+          "보관"
+        ]
+      ],
+      "relevantDocumentIds": [
+        "drug-label",
+        "drug-storage"
+      ],
+      "nearMissIds": [
+        "drug-sales"
+      ],
+      "scores": {
+        "drug-sales": 0.79,
+        "drug-label": 0.74,
+        "drug-storage": 0.72
+      },
+      "unrelatedDocumentIds": [
+        "sleep-light",
+        "sleep-sound",
+        "sleep-stats",
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "cal-none-a",
+      "split": "calibration",
+      "question": "우주선 엔진 수리 근거",
+      "facets": [
+        [
+          "우주선"
+        ],
+        [
+          "엔진"
+        ]
+      ],
+      "relevantDocumentIds": [],
+      "nearMissIds": [
+        "astronomy"
+      ],
+      "scores": {
+        "astronomy": 0.67
+      },
+      "unrelatedDocumentIds": [
+        "sleep-light",
+        "sleep-sound",
+        "sleep-stats",
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "drug-label",
+        "drug-storage",
+        "drug-sales",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "cal-none-b",
+      "split": "calibration",
+      "question": "체온계 교정 절차",
+      "facets": [
+        [
+          "체온계"
+        ],
+        [
+          "교정"
+        ]
+      ],
+      "relevantDocumentIds": [],
+      "nearMissIds": [],
+      "scores": {
+        "drug-label": 0.63
+      },
+      "unrelatedDocumentIds": [
+        "sleep-light",
+        "sleep-sound",
+        "sleep-stats",
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "drug-label",
+        "drug-storage",
+        "drug-sales",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "held-walk",
+      "split": "heldout",
+      "question": "산책 횟수와 빠르기 일지",
+      "facets": [
+        [
+          "걷기",
+          "보행"
+        ],
+        [
+          "일정",
+          "속도",
+          "기록"
+        ]
+      ],
+      "relevantDocumentIds": [
+        "walk-log",
+        "walk-pace"
+      ],
+      "nearMissIds": [
+        "sport-history"
+      ],
+      "scores": {
+        "sport-history": 0.8,
+        "walk-log": 0.75,
+        "walk-pace": 0.7
+      },
+      "unrelatedDocumentIds": [
+        "sleep-light",
+        "sleep-sound",
+        "sleep-stats",
+        "drug-label",
+        "drug-storage",
+        "drug-sales",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "held-room",
+      "split": "heldout",
+      "question": "잠자리 조도 조절",
+      "facets": [
+        [
+          "취침",
+          "수면"
+        ],
+        [
+          "조명"
+        ]
+      ],
+      "relevantDocumentIds": [
+        "sleep-light"
+      ],
+      "nearMissIds": [
+        "sleep-stats",
+        "sleep-sound"
+      ],
+      "scores": {
+        "sleep-stats": 0.77,
+        "sleep-sound": 0.74,
+        "sleep-light": 0.7
+      },
+      "unrelatedDocumentIds": [
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "drug-label",
+        "drug-storage",
+        "drug-sales",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "held-none-a",
+      "split": "heldout",
+      "question": "약물 상호작용의 실험 수치",
+      "facets": [
+        [
+          "약품",
+          "의약품"
+        ],
+        [
+          "상호작용"
+        ]
+      ],
+      "relevantDocumentIds": [],
+      "nearMissIds": [
+        "drug-sales",
+        "drug-label"
+      ],
+      "scores": {
+        "drug-sales": 0.79,
+        "drug-label": 0.76
+      },
+      "unrelatedDocumentIds": [
+        "sleep-light",
+        "sleep-sound",
+        "sleep-stats",
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "drug-storage",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    },
+    {
+      "id": "held-none-b",
+      "split": "heldout",
+      "question": "수면검사 판독과 진단 기준",
+      "facets": [
+        [
+          "수면"
+        ],
+        [
+          "판독",
+          "진단"
+        ]
+      ],
+      "relevantDocumentIds": [],
+      "nearMissIds": [
+        "sleep-stats"
+      ],
+      "scores": {
+        "sleep-stats": 0.81
+      },
+      "unrelatedDocumentIds": [
+        "sleep-light",
+        "sleep-sound",
+        "walk-log",
+        "walk-pace",
+        "sport-history",
+        "drug-label",
+        "drug-storage",
+        "drug-sales",
+        "astronomy",
+        "music",
+        "travel"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+﻿{
+    "id":  "synthetic-0",
+    "category":  "disease",
+    "updatedAt":  "2026-11-02",
+    "publishedAt":  null,
+    "sourceUrl":  "https://example.org/synthetic-0",
+    "publisher":  "SYNTHETIC TEST ONLY",
+    "content":  "가상질환알파 검색을 검증하기 위한 가상 문서입니다. 실제 의료정보가 아닙니다. 의료 판단에 사용하지 마세요.",
+    "title":  "가상질환알파 테스트 자료",
+    "rights":  {
+                   "permission":  "test-only",
+                   "checkedAt":  "2026-11-02",
+                   "terms":  "직접 작성한 합성 테스트 자료. 의료 근거가 아님."
+               },
+    "collectedAt":  "2026-11-02"
+}

@@ -1,0 +1,27 @@
+﻿{
+    "name":  "drmas-rag-lab",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "engines":  {
+                    "node":  "\u003e=24 \u003c25"
+                },
+    "scripts":  {
+                    "check":  "tsc --noEmit",
+                    "test":  "tsx --test test/*.test.ts",
+                    "cli":  "tsx src/cli.ts",
+                    "eval":  "tsx src/evaluate.ts",
+                    "semantic:mock":  "tsx src/semantic-check.ts",
+                    "quality:mock":  "tsx src/quality-check.ts",
+                    "encoding:diagnose":  "tsx src/encoding-diagnose.ts",
+                    "lint":  "tsc --noEmit --noUnusedLocals --noUnusedParameters"
+                },
+    "dependencies":  {
+                         "@google/genai":  "2.32.0"
+                     },
+    "devDependencies":  {
+                            "@types/node":  "26.6.6",
+                            "tsx":  "4.23.15",
+                            "typescript":  "7.0.2"
+                        }
+}
