@@ -1,0 +1,4 @@
+# Public read endpoint only; application-level gates fail closed by default.
+# No deployment is performed by adding this file.
+[functions.search-places]
+verify_jwt = false

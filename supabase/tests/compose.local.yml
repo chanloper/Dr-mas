@@ -1,0 +1,22 @@
+# Optional future LOCAL test fixture. Not started by this repository's tests.
+# No host ports, no network, no real credentials, no persistent DB volume.
+name: drmas-rls-review
+services:
+  db:
+    image: postgres:17
+    network_mode: none
+    environment:
+      POSTGRES_DB: drmas_rls_test
+      POSTGRES_USER: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./local_bootstrap.sql:/work/local_bootstrap.sql:ro
+      - ./rls_access.sql:/work/rls_access.sql:ro
+      - ../migrations/202611010001_auth_and_care.sql:/work/migration.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d drmas_rls_test]
+      interval: 2s
+      timeout: 2s
+      retries: 30

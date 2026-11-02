@@ -1,0 +1,32 @@
+# Use Vercel CLI from C:/MAS/Dr-mas, with Root Directory = mobile.
+# Upload only the mobile app and the public shared TypeScript contract.
+/*
+!/mobile/
+!/supabase/
+/supabase/*
+!/supabase/functions/
+/supabase/functions/*
+!/supabase/functions/_shared/
+
+# Never upload local settings, credentials, caches or previous build artifacts.
+**/.env
+**/.env.*
+**/.vercel/
+**/.expo/
+**/node_modules/
+**/dist/
+**/web-build/
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.mobileprovision
+**/*service-account*.json
+**/*credentials*.json
+**/.npmrc
+**/.netrc
+**/.aws/
+**/.ssh/
+**/*.log

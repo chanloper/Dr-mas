@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Medication } from '../features/app/types';
 
 export const C = {
@@ -12,12 +12,12 @@ export function Chip({ text, kind = 'blue' }: { text: string; kind?: 'blue' | 'g
   const color = { blue: C.blue, green: '#047857', red: C.danger, neutral: C.muted }[kind];
   return <View style={[s.chip, { backgroundColor: bg }]}><Text style={[s.chipText, { color }]}>{text}</Text></View>;
 }
-export function Action({ label, onPress, outline = false, danger = false, small = false }: {
-  label: string; onPress: () => void; outline?: boolean; danger?: boolean; small?: boolean;
+export function Action({ label, onPress, outline = false, danger = false, small = false, disabled = false }: {
+  label: string; onPress: () => void; outline?: boolean; danger?: boolean; small?: boolean; disabled?: boolean;
 }) {
   const color = danger ? C.danger : C.blue;
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [s.action,
-    { backgroundColor: outline ? C.white : color, borderColor: color, paddingVertical: small ? 11 : 15, opacity: pressed ? .78 : 1 }]}>
+  return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [s.action,
+    { backgroundColor: outline ? C.white : color, borderColor: color, paddingVertical: small ? 11 : 15, opacity: disabled ? .55 : pressed ? .78 : 1 }]}>
     <Text style={[s.actionText, { color: outline ? color : C.white, fontSize: small ? 13 : 16 }]}>{label}</Text>
   </Pressable>;
 }
@@ -28,12 +28,12 @@ export function TitleRow({ title, accessory }: { title: string; accessory?: stri
   return <View style={s.rowBetween}><Text style={s.sectionTitle}>{title}</Text>{accessory && <Text style={s.caption}>{accessory}</Text>}</View>;
 }
 
-export function Field(props: React.ComponentProps<typeof TextInput> & { label: string }) {
-  const { label, ...inputProps } = props;
-  return <View style={s.field}><Text style={s.fieldLabel}>{label}</Text><TextInput {...inputProps} style={s.input} placeholderTextColor={C.subtle} /></View>;
+export function Field(props: React.ComponentProps<typeof TextInput> & { label: string; inputRef?: React.ComponentProps<typeof TextInput>['ref'] }) {
+  const { label, inputRef, ...inputProps } = props;
+  return <View style={s.field}><Text style={s.fieldLabel}>{label}</Text><TextInput ref={inputRef} accessibilityLabel={label} {...inputProps} style={s.input} placeholderTextColor={C.subtle} /></View>;
 }
-export function MedicineRow({ med, onPress }: { med: Medication; onPress: () => void }) {
-  return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: med.taken }} onPress={onPress} style={s.medRow}>
+export function MedicineRow({ med, onPress, disabled = false }: { med: Medication; onPress: () => void; disabled?: boolean }) {
+  return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: med.taken, disabled }} disabled={disabled} onPress={onPress} style={[s.medRow, disabled && { opacity: .6 }]}>
     <View style={[s.checkBox, med.taken && s.checked]}><Text style={{ color: C.white, fontWeight: '900' }}>{med.taken ? '✓' : ''}</Text></View>
     <View style={s.flex}><Text style={s.bodyStrong}>{med.title}</Text><Text style={s.caption}>{med.detail}</Text></View>
     <View style={{ alignItems: 'flex-end', gap: 4 }}><Text style={s.timeText}>{med.time}</Text><Text style={{ fontSize: 11, color: med.taken ? C.green : C.subtle }}>{med.taken ? '완료' : '예정'}</Text></View>
@@ -47,7 +47,7 @@ export function SummaryTile({ title, value, footer }: { title: string; value: st
 }
 
 export const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg }, flex: { flex: 1 }, page: { padding: 20, paddingBottom: 30 },
+  root: { flex: 1, backgroundColor: C.bg }, flex: { flex: 1 }, page: { padding: 20, paddingBottom: 30, ...Platform.select({ web: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const } }) },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   chip: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' }, chipText: { fontSize: 11, fontWeight: '800' },
   action: { borderWidth: 1.5, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, minHeight: 44 }, actionText: { fontWeight: '800', textAlign: 'center' },

@@ -32,7 +32,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-secure-store",
+      ["expo-location", { "locationWhenInUsePermission": "주변 병원과 약국을 찾기 위해 현재 위치를 사용합니다." }]
     ],
     "experiments": {
       "typedRoutes": true,

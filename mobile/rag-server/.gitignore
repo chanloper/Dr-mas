@@ -1,0 +1,15 @@
+node_modules/
+.tools/
+data/
+reports/*
+!reports/.gitkeep
+.env
+.env.*
+!.env.example
+.smoke/
+dist/
+coverage/
+*.log
+*.tmp
+*.key
+*.pem

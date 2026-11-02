@@ -1,0 +1,6 @@
+snapshots/
+reports/
+.env*
+*.log
+*.key
+*.pem

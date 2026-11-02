@@ -16,7 +16,7 @@ export default function GuardianHome() {
     {sosNotice && !sosAcknowledged && <View style={s.sectionGap}><Panel style={{ borderColor: '#FCA5A5', backgroundColor: '#FFF1F2' }}><Text style={[s.sectionTitle, { color: C.danger }]}>⚠ 기기 내 SOS 알림</Text><Text style={[s.paragraph, { marginVertical: 12 }]}>이 기기에서 생성된 알림 상태입니다. 보호자에게 푸시 알림이 발송된 것은 아닙니다.</Text><Action label="확인 완료" onPress={() => setSosAcknowledged(true)} danger /></Panel></View>}
     <View style={s.sectionGap}><TitleRow title="연결된 가족" accessory="개인정보 보호" /><Panel>
       <View style={s.row}><View style={[s.avatar, { backgroundColor: '#E8F5EE' }]}><Text style={{ fontSize: 24, color: C.green }}>♡</Text></View><View style={s.flex}><Text style={s.bodyStrong}>아직 연결된 환자가 없어요</Text><Text style={[s.caption, { marginTop: 4 }]}>상대방의 동의가 있어야 건강 정보가 공유됩니다.</Text></View></View>
-      <View style={{ marginTop: 18 }}><Action label="가족 연결 기능 준비 중" outline onPress={() => Alert.alert('연결 준비 중', '계정 인증 및 환자 동의 API 연동 후 사용할 수 있습니다.')} /></View>
+      <View style={{ marginTop: 18 }}><Action label="가족 연결 기능 준비 중" outline onPress={() => Alert.alert('연결 준비 중', '가족 연결은 아직 사용할 수 없습니다. 연결이 가능해지면 안내해 드리겠습니다.')} /></View>
     </Panel></View>
     <View style={s.sectionGap}><TitleRow title="모니터링 요약" accessory="연동 전" /><View style={s.tileGrid}>
       <SummaryTile title="심박수" value="—" footer="웨어러블 연결 전" />

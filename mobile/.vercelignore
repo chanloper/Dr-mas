@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.vercel/
+.expo/
+node_modules/
+dist/
+web-build/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*service-account*.json
+*credentials*.json

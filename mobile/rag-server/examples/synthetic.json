@@ -1,0 +1,82 @@
+﻿[
+    {
+        "id":  "synthetic-0",
+        "category":  "disease",
+        "updatedAt":  "2026-11-02",
+        "publishedAt":  null,
+        "sourceUrl":  "https://example.org/synthetic-0",
+        "publisher":  "SYNTHETIC TEST ONLY",
+        "content":  "가상질환알파 검색을 검증하기 위한 가상 문서입니다. 실제 의료정보가 아닙니다. 의료 판단에 사용하지 마세요.",
+        "title":  "가상질환알파 테스트 자료",
+        "rights":  {
+                       "permission":  "test-only",
+                       "checkedAt":  "2026-11-02",
+                       "terms":  "직접 작성한 합성 테스트 자료. 의료 근거가 아님."
+                   },
+        "collectedAt":  "2026-11-02"
+    },
+    {
+        "id":  "synthetic-1",
+        "category":  "medicine",
+        "updatedAt":  "2026-11-02",
+        "publishedAt":  null,
+        "sourceUrl":  "https://example.org/synthetic-1",
+        "publisher":  "SYNTHETIC TEST ONLY",
+        "content":  "가상성분베타 검색을 검증하기 위한 가상 문서입니다. 실제 의료정보가 아닙니다. 의료 판단에 사용하지 마세요.",
+        "title":  "가상성분베타 테스트 자료",
+        "rights":  {
+                       "permission":  "test-only",
+                       "checkedAt":  "2026-11-02",
+                       "terms":  "직접 작성한 합성 테스트 자료. 의료 근거가 아님."
+                   },
+        "collectedAt":  "2026-11-02"
+    },
+    {
+        "id":  "synthetic-2",
+        "category":  "medication",
+        "updatedAt":  "2026-11-02",
+        "publishedAt":  null,
+        "sourceUrl":  "https://example.org/synthetic-2",
+        "publisher":  "SYNTHETIC TEST ONLY",
+        "content":  "가상복약감마 검색을 검증하기 위한 가상 문서입니다. 실제 의료정보가 아닙니다. 의료 판단에 사용하지 마세요.",
+        "title":  "가상복약감마 테스트 자료",
+        "rights":  {
+                       "permission":  "test-only",
+                       "checkedAt":  "2026-11-02",
+                       "terms":  "직접 작성한 합성 테스트 자료. 의료 근거가 아님."
+                   },
+        "collectedAt":  "2026-11-02"
+    },
+    {
+        "id":  "synthetic-3",
+        "category":  "lifestyle",
+        "updatedAt":  "2026-11-02",
+        "publishedAt":  null,
+        "sourceUrl":  "https://example.org/synthetic-3",
+        "publisher":  "SYNTHETIC TEST ONLY",
+        "content":  "가상수면델타 검색을 검증하기 위한 가상 문서입니다. 실제 의료정보가 아닙니다. 의료 판단에 사용하지 마세요.",
+        "title":  "가상수면델타 테스트 자료",
+        "rights":  {
+                       "permission":  "test-only",
+                       "checkedAt":  "2026-11-02",
+                       "terms":  "직접 작성한 합성 테스트 자료. 의료 근거가 아님."
+                   },
+        "collectedAt":  "2026-11-02"
+    },
+    {
+        "id":  "synthetic-4",
+        "category":  "caregiver",
+        "updatedAt":  "2026-11-02",
+        "publishedAt":  null,
+        "sourceUrl":  "https://example.org/synthetic-4",
+        "publisher":  "SYNTHETIC TEST ONLY",
+        "content":  "가상돌봄엡실론 검색을 검증하기 위한 가상 문서입니다. 실제 의료정보가 아닙니다. 의료 판단에 사용하지 마세요.",
+        "title":  "가상돌봄엡실론 테스트 자료",
+        "rights":  {
+                       "permission":  "test-only",
+                       "checkedAt":  "2026-11-02",
+                       "terms":  "직접 작성한 합성 테스트 자료. 의료 근거가 아님."
+                   },
+        "collectedAt":  "2026-11-02"
+    }
+]

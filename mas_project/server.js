@@ -12,6 +12,8 @@
  */
 
 require('dotenv').config(); // 환경변수(.env) 보안 격리 및 메모리 적재
+const { readSessionSecret } = require('./config/session');
+const sessionSecret = readSessionSecret(); // Validate before constructing services.
 const express = require('express');
 const session = require('express-session'); // 세션 기반 인메모리 인증 미들웨어
 const mariadb = require('mariadb'); // 비동기 기반 MariaDB 클라이언트
@@ -36,7 +38,7 @@ app.use(express.urlencoded({ extended: true })); // URL 인코딩된 폼 데이�
 
 // [보안] 클라이언트 인증 유지를 위한 세션 미들웨어 환경 세팅
 app.use(session({
-    secret: 'dr-mas-secret-key', // 세션 ID 암호화 서명 키
+    secret: sessionSecret,
     resave: false, // 변경사항이 없을 시 세션 재저장 방지 (서버 리소스 최적화)
     saveUninitialized: true, // 초기화되지 않은 빈 세션 저장 허용
     cookie: { maxAge: 3600000 } // 세션 쿠키 만료 시간 설정 (1시간)

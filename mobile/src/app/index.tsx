@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DrMASProvider } from '../features/app/context';
 import { useDrMASController } from '../features/app/useDrMASController';
@@ -14,10 +14,13 @@ import ServicesScreen from '../screens/ServicesScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import type { Tab } from '../features/app/types';
 
-// All screens share one UI state in this stage. No server or medical services connected.
+// Shared controller owns authentication and in-app navigation.
+export function generateMetadata() {
+  return { title: 'Dr.MAS', description: '나의 복약 기록과 가족의 건강을 위한 일상 관리' };
+}
 export default function DrMAS() {
   const controller = useDrMASController();
-  const { route, role, roleLabel, tab, setTab, sosLeft, setSosLeft } = controller;
+  const { route, role, roleLabel, tab, setTab, sosLeft, setSosLeft, user, authLoading, authInitialized } = controller;
   const tabs: { key: Tab; icon: string; title: string }[] = [
     { key: 'home', icon: '⌂', title: '홈' },
     { key: 'medication', icon: '◷', title: '복약' },
@@ -26,7 +29,7 @@ export default function DrMAS() {
     { key: 'settings', icon: '⚙', title: '설정' },
   ];
   return <DrMASProvider value={controller}><SafeAreaView style={s.root} edges={['top', 'bottom']}>
-    {route === 'welcome' ? <WelcomeScreen /> : route !== 'dashboard' ? <AuthScreen /> : <>
+    {authLoading && !authInitialized ? <View style={[s.flex, { alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator size="large" color={C.blue} /><Text style={s.paragraph}>인증 정보를 확인하고 있습니다.</Text></View> : route === 'welcome' ? <WelcomeScreen /> : route !== 'dashboard' || !user ? <AuthScreen /> : <>
       <View style={s.appHeader}><View style={s.row}><View style={s.smallBrand}><Text style={s.brandSymbol}>✚</Text></View><Text style={s.headerBrand}>Dr.MAS</Text></View><Chip text={`${roleLabel} · 기기 내 화면`} kind="neutral" /></View>
       <ScrollView key={`${tab}-${role}`} contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         {tab === 'home' ? (role === 'patient' ? <PatientHome /> : <GuardianHome />) : tab === 'medication' ? <MedicationScreen /> : tab === 'ai' ? <AiScreen /> : tab === 'services' ? <ServicesScreen /> : <SettingsScreen />}
