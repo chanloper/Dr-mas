@@ -1,5 +1,6 @@
 ﻿import { normalize, type State } from './model.js';
 import type { Hit } from './search.js';
+import {hasChunkPermission} from './rights.js';
 export interface EvidencePolicy { minVector:number; minFacetCoverage:number; minSeparation:number }
 export interface RankedHit extends Hit { facetCoverage:number; rerankScore:number; sourceValid:boolean }
 export function sourceMatches(hit:Hit,state:State):boolean {
@@ -9,7 +10,7 @@ export function sourceMatches(hit:Hit,state:State):boolean {
 /** Rule-based demonstration, not a learned medical reranker. Facets must be specified independently of relevance labels. */
 export function rerankEvidence(hits:Hit[],facets:string[][],state:State,policy:EvidencePolicy) {
  for(const x of Object.values(policy))if(!Number.isFinite(x)||x<0||x>1)throw new Error('INVALID_EVIDENCE_POLICY');
- const ranked:RankedHit[]=hits.map(h=>{
+ const ranked:RankedHit[]=hits.filter(h=>hasChunkPermission(state.documents[h.documentId],state.chunks[h.chunkId],'local_search')&&hasChunkPermission(state.documents[h.documentId],state.chunks[h.chunkId],'quotation')).map(h=>{
   const text=normalize(`${h.title} ${h.text}`);
   const facetCoverage=facets.length?facets.filter(group=>group.some(term=>text.includes(normalize(term)))).length/facets.length:0;
   return {...h,facetCoverage,sourceValid:sourceMatches(h,state),rerankScore:0.6*Math.max(0,h.vectorScore??0)+0.15*h.keywordScore+0.25*facetCoverage};

@@ -2,6 +2,7 @@
 import type { Repository } from './repository.js';
 import { SearchIndex, insufficientEvidenceMessage, type Hit, type SearchOptions } from './search.js';
 import { GuardedProvider, embeddingProfile } from './gemini.js';
+import {hasPermission,hasChunkPermission} from './rights.js';
 export function routeSafety(question:string):'emergency'|'professional'|'privacy'|null {
  if(/숨.{0,4}(못|안|않)|호흡곤란|의식.{0,4}(없|잃)|가슴.{0,8}(통증|아프)|심한.{0,4}출혈|자살|자해|과다.?복용|죽고.?싶/iu.test(question))return 'emergency';
  if(/주민등록|\b\d{6}[- ]?[1-4]\d{6}\b|01[016789][- ]?\d{3,4}[- ]?\d{4}|환자명|진료기록|복약기록/u.test(question))return 'privacy';
@@ -34,12 +35,13 @@ export async function answer(repo:Repository,question:string,options:{api?:Guard
  const disclaimer='일반 건강정보 자료의 인용입니다. 개인별 의료 판단이나 의료적 정확성을 보장하지 않습니다.';
  if(!options.api) {
    const result=new SearchIndex(state).search(question,options.search);
-   return {status:result.status==='ok'?'local_evidence':'insufficient_evidence',message:result.status==='ok'?disclaimer:insufficientEvidenceMessage,hits:result.hits,mock:true};
+   const hits=result.hits.filter(h=>hasPermission(state.documents[h.documentId],'quotation'));
+   return {status:hits.length?'local_evidence':'insufficient_evidence',message:hits.length?disclaimer:insufficientEvidenceMessage,hits,mock:true};
  }
  if(!options.publicQuestion)throw new Error('PUBLIC_NONPERSONAL_QUESTION_REQUIRED');
  // Never send synthetic documents to Gemini or mix test evidence into a real answer.
  const live=structuredClone(state);
- for(const [id,c] of Object.entries(live.chunks))if(live.documents[c.documentId]?.rights.permission!=='permitted'){delete live.chunks[id];delete live.vectors[id];}
+ for(const [id,c] of Object.entries(live.chunks))if(live.documents[c.documentId]?.rights.permission==='test-only'||!['local_search','quotation','external_generation'].every(scope=>hasPermission(live.documents[c.documentId],scope as 'local_search'|'quotation'|'external_generation'))){delete live.chunks[id];delete live.vectors[id];}
  if(!Object.keys(live.chunks).length)return {status:'insufficient_evidence',message:insufficientEvidenceMessage,claims:[]};
  const values=await options.api.embed(normalize(question),'RETRIEVAL_QUERY');
  const result=new SearchIndex(live).search(question,options.search,{profile:embeddingProfile,values});
@@ -49,7 +51,12 @@ export async function answer(repo:Repository,question:string,options:{api?:Guard
  const evidence=result.hits.map(h=>({chunkId:h.chunkId,text:h.text}));
  const prompt=JSON.stringify({task:'질문에 답하는 원문 인용문을 선택. 자료가 충돌하면 보류. JSON만 출력.',question,untrustedEvidence:evidence});
  try {
+   // Recheck immediately before external transmission; revoked reviews fail closed.
+   const current=await repo.read();
+   if(result.hits.some(h=>!['local_search','quotation','external_generation'].every(scope=>hasChunkPermission(current.documents[h.documentId],current.chunks[h.chunkId],scope as 'local_search'|'quotation'|'external_generation'))||current.documents[h.documentId]?.contentHash!==live.documents[h.documentId]?.contentHash))return {status:'insufficient_evidence',message:insufficientEvidenceMessage,claims:[]};
    const claims=validateClaims(await options.api.select(prompt),result.hits);
+   const latest=await repo.read();
+   if(result.hits.some(h=>!['local_search','quotation','external_generation'].every(scope=>hasChunkPermission(latest.documents[h.documentId],latest.chunks[h.chunkId],scope as 'local_search'|'quotation'|'external_generation'))||latest.documents[h.documentId]?.contentHash!==live.documents[h.documentId]?.contentHash))return {status:'insufficient_evidence',message:insufficientEvidenceMessage,claims:[]};
    return {status:claims.length?'grounded_quotes':'insufficient_evidence',claims,message:claims.length?disclaimer:insufficientEvidenceMessage};
  }catch(e){if(e instanceof Error && ['INVALID_CITATION','INVALID_MODEL_RESPONSE'].includes(e.message))return {status:'unverified_response',claims:[]};throw e;}
 }

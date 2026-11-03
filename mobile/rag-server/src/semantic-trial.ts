@@ -6,7 +6,7 @@ const base={publisher:'SYNTHETIC TEST ONLY',publishedAt:null,updatedAt:'2026-11-
 export const semanticDocuments:DocumentInput[]=[
  {...base,id:'semantic-rest',title:'휴식 자료',sourceUrl:'https://example.org/semantic-rest',content:'야간 수면과 규칙적인 취침 환경에 관한 합성 문서입니다. 검색 기능 검증 전용이며 실제 의료 조언이 아닙니다.'},
  {...base,id:'semantic-activity',title:'활동 자료',sourceUrl:'https://example.org/semantic-activity',content:'걷기와 신체 운동에 관한 합성 문서입니다. 검색 기능 검증 전용이며 실제 의료 조언이 아닙니다.'}
-];
+].map(d=>({...d,rights:{...d.rights,scopes:Object.fromEntries((['local_search','quotation','external_embedding'] as const).map(scope=>[scope,{decision:'permitted',scope,evidenceUrl:'https://example.org/semantic-license',reviewedAt:'2026-11-03',reviewer:'synthetic-fixture-author',documentId:d.id,documentVersion:1,contentHash:hash(d.content),purpose:'Fixed synthetic semantic test; live execution requires separate approval'}]))}})) as DocumentInput[];
 export const semanticQuestions=[{question:'잠들기가 힘들어요',expectedDocumentId:'semantic-rest'}] as const;
 export const semanticLimits={maxCalls:3,maxCharacters:512,timeoutMs:10000,attempts:1,intervalMs:1100} as const;
 // Demo threshold only: do not change production thresholds or claim calibrated medical relevance.

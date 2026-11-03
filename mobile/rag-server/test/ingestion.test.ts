@@ -44,7 +44,7 @@ test('paged collection resumes, separates structured lookup and RAG, never embed
  assert.equal(Object.keys(s.ingestion!.raw).length,2);assert.ok(Object.values(s.ingestion!.raw)[0]!.payload.includes('unknownField'));
  assert.equal((await lookupMedicines(store,{itemId:'1001'})).items[0]!.name,'가상시험약1001');
  assert.equal((await lookupMedicines(store,{ingredient:'추측성분'})).total,0);
- assert.equal(new SearchIndex(await rag.read()).search('가상시험약1001').status,'ok');
+ assert.equal(new SearchIndex(await rag.read()).search('가상시험약1001').status,'insufficient_evidence');
  let calls=0;const api=new GuardedProvider(rag,{embed:async()=>{calls++;return [];},select:async()=>{calls++;return '';}},{...defaultLimits,intervalMs:0});
  assert.equal((await indexDocuments(rag,api)).indexed,0);
  assert.equal((await answer(rag,'가상시험약1001',{api,publicQuestion:true})).status,'insufficient_evidence');assert.equal(calls,0);

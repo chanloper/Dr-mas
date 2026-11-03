@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { answer } from './answer.js';
 import type { Repository } from './repository.js';
 import { hash } from './model.js';
+import {hasPermission} from './rights.js';
 
 export const disclaimer='참고용 일반 정보이며 진단·처방이나 의료진의 판단을 대신하지 않습니다.';
 export class ApiError extends Error {
@@ -28,7 +29,7 @@ export async function localChat(repo:Repository,question:string,options:{synthet
   const d=state.documents[c.documentId];
   const eligible=options.syntheticDocuments
    ?d?.rights.permission==='test-only'&&options.syntheticDocuments.get(d.id)===hash(d.content)&&d.content.slice(c.start,c.end)===c.text
-   :d?.rights.permission==='permitted';
+   :d?.rights.permission!=='test-only'&&hasPermission(d,'local_search');
   if(!eligible){delete state.chunks[id];delete state.vectors[id];}
  }
  const result=await answer({read:async()=>state,transaction:async()=>{throw new Error('READ_ONLY');}},question);

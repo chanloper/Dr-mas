@@ -1,5 +1,6 @@
 ﻿export const insufficientEvidenceMessage='확인된 자료가 부족하여 답변할 수 없습니다';
 import { normalize, type MedicalDocument, type State, type Chunk } from './model.js';
+import {hasPermission,hasChunkPermission} from './rights.js';
 export interface Hit { documentId:string; chunkId:string; title:string; publisher:string; sourceUrl:string; updatedAt:string|null; version:number; text:string; score:number; keywordScore:number; vectorScore:number|null }
 export interface SearchOptions { limit:number; minKeyword:number; minVector:number }
 export const defaults:SearchOptions={limit:5,minKeyword:0.2,minVector:0.75}; // Provisional: calibrate using an independent evaluation set.
@@ -11,7 +12,7 @@ export function cosine(a:number[],b:number[]):number {
 export class SearchIndex {
   private postings=new Map<string,Set<string>>(); private chunks:Chunk[];
   constructor(private state:State) {
-    this.chunks=Object.values(state.chunks);
+    this.chunks=Object.values(state.chunks).filter(c=>hasChunkPermission(state.documents[c.documentId],c,'local_search'));
     for(const c of this.chunks) {
       const d=state.documents[c.documentId]!;
       const s=normalize(`${d.title} ${c.text}`);
@@ -31,14 +32,15 @@ export class SearchIndex {
     if(queryVector) for(const [id,v] of Object.entries(this.state.vectors)) if(v.profile===queryVector.profile)candidates.add(id);
     const scored:Hit[]=[];
     for(const id of candidates) {
-      const c=this.state.chunks[id]!; const d:MedicalDocument=this.state.documents[c.documentId]!;
+      const c=this.state.chunks[id];if(!c)continue; const d:MedicalDocument=this.state.documents[c.documentId]!;
+      if(!hasChunkPermission(d,c,'local_search'))continue;
       const body=normalize(`${d.title} ${c.text}`);
       const lexical=terms.filter(t=>body.includes(t)).length/Math.max(1,terms.length);
       const stored=this.state.vectors[id];
       const vector=queryVector && stored?.profile===queryVector.profile?cosine(queryVector.values,stored.values):null;
       if(lexical<cfg.minKeyword && (vector===null || vector<cfg.minVector))continue;
       const score=queryVector?0.55*lexical+0.45*Math.max(0,vector??0):lexical;
-      scored.push({documentId:d.id,chunkId:id,title:d.title,publisher:d.publisher,sourceUrl:d.sourceUrl,updatedAt:d.updatedAt,version:d.version,text:c.text,score,keywordScore:lexical,vectorScore:vector});
+      scored.push({documentId:d.id,chunkId:id,title:d.title,publisher:d.publisher,sourceUrl:d.sourceUrl,updatedAt:d.updatedAt,version:d.version,text:hasPermission(d,'quotation')?c.text:'',score,keywordScore:lexical,vectorScore:vector});
     }
     scored.sort((a,b)=>b.score-a.score || a.chunkId.localeCompare(b.chunkId));
     const hits:Hit[]=[]; const seen=new Set<string>();

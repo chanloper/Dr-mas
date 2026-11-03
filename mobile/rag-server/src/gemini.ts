@@ -3,6 +3,7 @@ import { GoogleGenAI, type HttpOptions } from '@google/genai';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Repository } from './repository.js';
 import { hash, validateDocument, type MedicalDocument } from './model.js';
+import {hasPermission,hasChunkPermission} from './rights.js';
 export const embeddingSettings={model:'gemini-embedding-001',dimensions:768,documentTask:'RETRIEVAL_DOCUMENT',queryTask:'RETRIEVAL_QUERY'} as const;
 export const embeddingProfile=`${embeddingSettings.model}:${embeddingSettings.dimensions}:retrieval:v1`;
 export interface Provider { embed(text:string,task:'RETRIEVAL_DOCUMENT'|'RETRIEVAL_QUERY',signal:AbortSignal):Promise<number[]>; select(prompt:string,signal:AbortSignal):Promise<string> }
@@ -60,20 +61,21 @@ export class GuardedProvider {
 }
 export async function indexDocuments(repo:Repository,api:GuardedProvider,batchSize=16,options:{syntheticTestDocuments?:ReadonlyMap<string,string>}={}) {
  if(!Number.isInteger(batchSize)||batchSize<1||batchSize>100)throw new Error('INVALID_BATCH_SIZE');
- const eligible=(doc:MedicalDocument|undefined)=>!!doc&&(doc.rights.permission==='permitted'||(doc.rights.permission==='test-only'&&options.syntheticTestDocuments?.get(doc.id)===doc.contentHash));
+ const eligible=(doc:MedicalDocument|undefined)=>hasPermission(doc,'external_embedding')&&!!doc
+  &&(doc.rights.permission!=='test-only'||options.syntheticTestDocuments?.get(doc.id)===doc.contentHash);
  const state=await repo.read();const chunks=Object.values(state.chunks);
  let indexed=0,skipped=0;
  for(let start=0;start<chunks.length;start+=batchSize) {
    for(const chunk of chunks.slice(start,start+batchSize)) {
      const current=await repo.read(); const doc=current.documents[chunk.documentId];
-     if(!eligible(doc)) {skipped++;continue;}
+     if(!eligible(doc)||!hasChunkPermission(doc,chunk,'external_embedding')) {skipped++;continue;}
      validateDocument(doc);assertTextIntegrity(chunk.text);
      if(current.vectors[chunk.id]?.profile===embeddingProfile){skipped++;continue;}
      const cacheKey=hash(`${embeddingProfile}:RETRIEVAL_DOCUMENT:${chunk.contentHash}`);
      const cached=current.embeddingCache?.[cacheKey];
      const values=cached??await api.embed(chunk.text,embeddingSettings.documentTask);
      await repo.transaction(s=>{
-       if(s.chunks[chunk.id]?.contentHash!==chunk.contentHash || !eligible(s.documents[chunk.documentId]))throw new Error('DOCUMENT_CHANGED_DURING_INDEX');
+       if(s.chunks[chunk.id]?.contentHash!==chunk.contentHash || !eligible(s.documents[chunk.documentId])||!hasChunkPermission(s.documents[chunk.documentId],s.chunks[chunk.id],'external_embedding'))throw new Error('DOCUMENT_CHANGED_DURING_INDEX');
        (s.embeddingCache??={})[cacheKey]=values;
        s.vectors[chunk.id]={profile:embeddingProfile,values};
      });

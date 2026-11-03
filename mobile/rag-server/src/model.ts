@@ -1,11 +1,12 @@
 ﻿import { assertTextIntegrity } from './encoding.js';
 import { createHash } from 'node:crypto';
+import {validateScopes,type ScopeDecisions} from './rights.js';
 export const categories = ['disease','medicine','medication','lifestyle','caregiver'] as const;
 export interface DocumentInput {
   id: string; title: string; publisher: string; sourceUrl: string;
   publishedAt: string | null; updatedAt: string | null; collectedAt: string;
   category: typeof categories[number]; content: string;
-  rights: { terms: string; permission: 'permitted' | 'test-only' | 'pending'; checkedAt: string };
+  rights: { terms: string; permission: 'permitted' | 'test-only' | 'pending'; checkedAt: string;scopes?:ScopeDecisions };
 }
 export interface MedicalDocument extends DocumentInput { contentHash: string; version: number }
 export interface Chunk { id: string; documentId: string; version: number; contentHash: string; text: string; start: number; end: number }
@@ -26,6 +27,7 @@ export function validateDocument(value: unknown): DocumentInput {
   for (const key of ['publishedAt','updatedAt','collectedAt'] as const)
     if (d[key] !== null && (typeof d[key] !== 'string' || !Number.isFinite(Date.parse(d[key])))) throw new Error(`INVALID_${key}`);
   if (!d.rights || !['permitted','test-only','pending'].includes(d.rights.permission) || !d.rights.terms?.trim() || !Number.isFinite(Date.parse(d.rights.checkedAt))) throw new Error('RIGHTS_REQUIRED');
+  validateScopes(d.rights.scopes);
   for(const value of [d.title,d.publisher,d.content,d.rights.terms])assertTextIntegrity(value);
   return structuredClone(d);
 }

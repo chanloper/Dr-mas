@@ -6,6 +6,7 @@ import { SearchIndex, defaults } from './search.js';
 import { GeminiProvider, GuardedProvider, indexDocuments } from './gemini.js';
 import { answer, routeSafety } from './answer.js';
 import { embeddingProfile } from './gemini.js';
+import {hasPermission} from './rights.js';
 const [command,...args]=process.argv.slice(2);
 const repo=new LocalRepository(resolve('data/local'));
 const flags=new Set(args.filter(x=>x.startsWith('--')));const positional=args.filter(x=>!x.startsWith('--'));
@@ -23,7 +24,7 @@ try {
      else {
        if(!question.trim()||question.length>2000)throw new Error('INVALID_QUERY');
        const api=new GuardedProvider(repo,new GeminiProvider());const state=await repo.read();
-       for(const [id,c] of Object.entries(state.chunks))if(state.documents[c.documentId]?.rights.permission!=='permitted'){delete state.chunks[id];delete state.vectors[id];}
+       for(const [id,c] of Object.entries(state.chunks))if(!hasPermission(state.documents[c.documentId],'local_search')){delete state.chunks[id];delete state.vectors[id];}
        const values=Object.keys(state.chunks).length?await api.embed(normalize(question),'RETRIEVAL_QUERY'):undefined;
        console.log(JSON.stringify(new SearchIndex(state).search(question,search,values?{profile:embeddingProfile,values}:undefined),null,2));
      }

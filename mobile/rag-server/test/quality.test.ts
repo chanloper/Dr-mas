@@ -1,3 +1,4 @@
+import {reviewFixture} from './helpers.js';
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { retrievalMetrics, rerankEvidence, sourceMatches } from '../src/retrieval-quality.js';
@@ -28,7 +29,7 @@ test('low-confidence and ambiguous candidates abstain rather than inventing evid
  assert.equal(rerankEvidence(qualityCandidates(q),q.facets,qualityState,{minVector:0.5,minFacetCoverage:1,minSeparation:1}).reason,'ambiguous_evidence');
 });
 test('uncalibrated vector-only retrieval does not trigger answer generation',async()=>withRepo(async repo=>{
- const d=fixture('public','취침 환경과 수면 안내를 다루는 공개 가상 자료');d.rights.permission='permitted';await register(repo,d);
+ const d=fixture('public','취침 환경과 수면 안내를 다루는 공개 가상 자료');d.rights.permission='permitted';reviewFixture(d,['local_search','quotation','external_embedding','external_generation']);await register(repo,d);
  const state=await repo.read();const id=Object.keys(state.chunks)[0]!;await repo.transaction(s=>{s.vectors[id]={profile:'gemini-embedding-001:768:retrieval:v1',values:[1,0]};});
  let generated=0;const api=new GuardedProvider(repo,{embed:async()=>[1,0],select:async()=>{generated++;return ''; }},{...defaultLimits,intervalMs:0});
  const result=await answer(repo,'잠들기가 힘들어요',{api,publicQuestion:true});assert.equal(result.status,'insufficient_evidence');assert.equal(result.reason,'uncalibrated_vector_only_evidence');assert.equal(generated,0);

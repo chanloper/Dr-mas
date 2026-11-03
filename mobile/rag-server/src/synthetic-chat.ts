@@ -8,7 +8,7 @@ export const syntheticChatDocuments:DocumentInput[]=[
   content:'합성안내카드알파의 색상 표식은 파랑입니다. 이 문장은 검색과 출처 표시만 검사합니다. 실제 의약품, 효능, 용량 또는 복약 지침이 아닙니다.',rights:{permission:'test-only',terms:'Developer-authored synthetic retrieval fixture; never medical evidence',checkedAt:'2026-11-03'}},
  {id:'synthetic_card_beta',title:'[합성 테스트] 베타 안내카드',publisher:'Dr.MAS 합성 테스트',sourceUrl:'https://example.org/drmas-synthetic/beta',publishedAt:null,updatedAt:'2026-11-03',collectedAt:'2026-11-03',category:'medication',
   content:'합성안내카드베타의 도형 표식은 네모입니다. 이 문장은 검색과 출처 표시만 검사합니다. 실제 의약품, 효능, 용량 또는 복약 지침이 아닙니다.',rights:{permission:'test-only',terms:'Developer-authored synthetic retrieval fixture; never medical evidence',checkedAt:'2026-11-03'}}
-];
+].map(d=>({...d,rights:{...d.rights,scopes:Object.fromEntries((['local_search','quotation'] as const).map(scope=>[scope,{decision:'permitted',scope,evidenceUrl:'https://example.org/drmas-synthetic/license',reviewedAt:'2026-11-03',reviewer:'synthetic-fixture-author',documentId:d.id,documentVersion:1,contentHash:hash(d.content),purpose:'Isolated synthetic local retrieval only'}]))}})) as DocumentInput[];
 export async function createSyntheticChat(environment:string|undefined){
  if(environment==='production')throw new Error('SYNTHETIC_MODE_NOT_ALLOWED');
  const allowed=new Map(syntheticChatDocuments.map(d=>[d.id,hash(d.content)]));

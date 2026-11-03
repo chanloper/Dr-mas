@@ -2,6 +2,7 @@
 import { mkdir, writeFile, rename, open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { emptyState, hash, splitDocument, validateDocument, type State } from './model.js';
+import {bindRights} from './rights.js';
 export interface Repository { read(): Promise<State>; transaction<T>(fn:(state:State)=>Promise<T>|T):Promise<T> }
 /** One atomic snapshot per transaction. Lock rejects concurrent writers across processes. */
 export class LocalRepository implements Repository {
@@ -35,10 +36,11 @@ export async function register(repo:Repository,input:unknown) {
     const duplicate=Object.values(state.documents).find(x=>x.id!==d.id && (x.contentHash===contentHash || x.sourceUrl===d.sourceUrl));
     if (duplicate) return {status:'duplicate',documentId:duplicate.id};
     if (old && old.contentHash===contentHash) {
-      state.documents[d.id]={...d,contentHash,version:old.version};
+      state.documents[d.id]={...d,rights:bindRights(d,old.version),contentHash,version:old.version};
       return {status:'metadata-updated',documentId:d.id};
     }
-    const doc={...d,contentHash,version:(old?.version??0)+1};
+    const version=(old?.version??0)+1;
+    const doc={...d,rights:bindRights(d,version),contentHash,version};
     for (const [id,c] of Object.entries(state.chunks)) if (c.documentId===d.id) {delete state.chunks[id]; delete state.vectors[id];}
     state.documents[d.id]=doc;
     for (const c of splitDocument(doc)) state.chunks[c.id]=c;

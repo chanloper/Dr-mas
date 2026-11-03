@@ -12,6 +12,7 @@ export const qualityState=emptyState();
 for(const [id,title,text] of texts){
  const input:DocumentInput={id,title,publisher:'SYNTHETIC ONLY',sourceUrl:`https://example.org/quality/${id}`,publishedAt:null,updatedAt:'2026-11-02',collectedAt:'2026-11-02',category:'lifestyle',content:`${text}. 가상 안내서 검색 검증용 표식이며 실제 의료 조언이 아닙니다.`,rights:{terms:'Authored synthetic evaluation only',permission:'test-only',checkedAt:'2026-11-02'}};
  const d={...input,version:1,contentHash:hash(input.content)};qualityState.documents[id]=d;for(const c of splitDocument(d))qualityState.chunks[c.id]=c;
+ d.rights.scopes=Object.fromEntries((['local_search','quotation'] as const).map(scope=>[scope,{decision:'permitted',scope,evidenceUrl:'https://example.org/quality-license',reviewedAt:'2026-11-03',reviewer:'synthetic-evaluation-author',documentId:id,documentVersion:1,contentHash:d.contentHash,purpose:'Offline synthetic relevance evaluation'}]));
 }
 export interface QualityCase { id:string;split:'calibration'|'heldout';question:string;facets:string[][];relevantDocumentIds:string[];nearMissIds:string[];scores:Record<string,number> }
 // Similarities are deliberately scripted stress fixtures, NOT Gemini vectors. Gold IDs are not used by the reranker.

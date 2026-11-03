@@ -1,3 +1,4 @@
+import {reviewFixture} from './helpers.js';
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from '../src/repository.js';
@@ -7,7 +8,7 @@ import { withRepo, fixture } from './helpers.js';
 const vector=(first:number)=>Array.from({length:768},(_,i)=>i===first?1:0);
 const provider:Provider={embed:async text=>vector(text.includes('알파')?0:1),select:async()=>'{"abstain":true,"claims":[]}'};
 const limits={...defaultLimits,intervalMs:0};
-function permitted(id='sample',text?:string){const d=fixture(id,text);d.rights.permission='permitted';return d;}
+function permitted(id='sample',text?:string,version=1){const d=fixture(id,text);d.rights.permission='permitted';reviewFixture(d,['local_search','quotation','external_embedding','external_generation'],version);return d;}
 test('missing key is a clear configuration error',()=>assert.throws(()=>new GeminiProvider(''),/GEMINI_API_KEY_REQUIRED/));
 test('cosine validates vectors and ranks semantic neighbours',()=>{
  assert.equal(cosine([1,0],[1,0]),1);assert.equal(cosine([1,0],[0,1]),0);assert.throws(()=>cosine([1],[1,2]));assert.throws(()=>cosine([NaN],[1]));
@@ -17,8 +18,8 @@ test('indexing resumes, unchanged chunks skip, changed chunks reindex, cache reu
  await register(r,permitted());await register(r,fixture('synthetic','절대 외부로 전송하지 않을 가상 내용'));
  assert.deepEqual(await indexDocuments(r,api),{indexed:1,skipped:1,total:2});
  assert.equal((await indexDocuments(r,api)).indexed,0);assert.equal((await r.read()).usage.calls,1);
- await register(r,permitted('sample','테스트성분베타 갱신 정보입니다.'));assert.equal((await indexDocuments(r,api)).indexed,1);
- await register(r,permitted());assert.equal((await indexDocuments(r,api)).indexed,1);assert.equal((await r.read()).usage.calls,2);
+ await register(r,permitted('sample','테스트성분베타 갱신 정보입니다.',2));assert.equal((await indexDocuments(r,api)).indexed,1);
+ await register(r,permitted('sample',undefined,3));assert.equal((await indexDocuments(r,api)).indexed,1);assert.equal((await r.read()).usage.calls,2);
 }));
 test('hybrid search includes vector-only and lexical hits without duplicate chunks',async()=>withRepo(async r=>{
  await register(r,permitted());await register(r,permitted('beta','테스트성분베타 문서 내용입니다.'));

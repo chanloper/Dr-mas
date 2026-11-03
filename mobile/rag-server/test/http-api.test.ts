@@ -51,7 +51,7 @@ test('Supabase verifies through configured Auth endpoint, never decodes or accep
 test('pending and test-only sources excluded, permitted local quotes keep real ids, no provider invoked',async()=>withRepo(async repo=>{
  const doc=fixture('allowed','테스트성분알파 안내를 위한 합성 자료입니다.');
  await register(repo,doc);assert.equal((await localChat(repo,'테스트성분알파')).status,'insufficient_evidence');
- await register(repo,{...doc,rights:{...doc.rights,permission:'pending'}});assert.equal((await localChat(repo,'테스트성분알파')).sources.length,0);
+ await register(repo,{...doc,rights:{...doc.rights,permission:'pending',scopes:{}}});assert.equal((await localChat(repo,'테스트성분알파')).sources.length,0);
  await register(repo,{...doc,rights:{...doc.rights,permission:'permitted'}});
  const r=await localChat(repo,'테스트성분알파');assert.equal(r.status,'local_evidence');assert.equal(r.sources[0]?.documentId,'allowed');assert.equal(r.sources[0]?.quote,doc.content);
  assert.equal((await repo.read()).usage.calls,0);

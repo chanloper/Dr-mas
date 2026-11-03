@@ -1,3 +1,4 @@
+import {reviewFixture} from './helpers.js';
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GoogleGenAI } from '@google/genai';
@@ -18,7 +19,7 @@ test('all insufficient-evidence answer paths and search use the requested Korean
  const p:Provider={embed:async()=>Array.from({length:768},(_,i)=>i===0?1:0),select:async()=>'{"abstain":true,"claims":[]}'};
  const api=new GuardedProvider(repo,p,{...defaultLimits,intervalMs:0});
  check(await answer(repo,'XYZ999',{api,publicQuestion:true}));
- const doc=fixture();doc.rights.permission='permitted';await register(repo,doc);
+ const doc=fixture();doc.rights.permission='permitted';reviewFixture(doc,['local_search','quotation','external_embedding','external_generation']);await register(repo,doc);
  check(await answer(repo,'XYZ999',{api,publicQuestion:true}));
  check(await answer(repo,'테스트성분알파',{api,publicQuestion:true}));
  assert.equal(insufficientEvidenceMessage,'확인된 자료가 부족하여 답변할 수 없습니다');
