@@ -37,7 +37,7 @@ export async function localChat(repo:Repository,question:string,options:{synthet
  return {status:result.status,message:result.message,
   disclaimer:options.syntheticDocuments?'합성 테스트 자료입니다. 실제 의료정보나 복약 지침이 아닙니다. '+disclaimer:disclaimer,
   mode:options.syntheticDocuments?'synthetic' as const:'local' as const,
-  sources:hits.map(h=>({documentId:h.documentId,chunkId:h.chunkId,title:h.title,sourceUrl:h.sourceUrl,quote:h.text,publisher:h.publisher,updatedAt:h.updatedAt}))};
+  sources:hits.map(h=>({documentId:h.documentId,chunkId:h.chunkId,title:h.title,sourceUrl:h.attribution?.datasetUrl??h.sourceUrl,quote:h.text,publisher:h.publisher,updatedAt:h.updatedAt,...(h.attribution?{attribution:h.attribution}:{})}))};
 }
 export function createRagServer(options:{verify:(token:string,signal:AbortSignal)=>Promise<string>;chat:(question:string)=>Promise<Awaited<ReturnType<typeof localChat>>>;origins?:string[];timeoutMs?:number;rateLimit?:number;now?:()=>number;observeOnce?:(result:{httpStatus:number;responseType:string})=>void}) {
  let observationAvailable=!!options.observeOnce;

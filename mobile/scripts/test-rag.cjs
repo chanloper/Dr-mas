@@ -56,3 +56,13 @@ test('synthetic citation shows warning, exact source id, publisher and update da
  body.sources[0].updatedAt='invalid-date';
  await assert.rejects(requestRag('합성안내카드알파',{url:'https://rag.example',development:false,token:async()=>'fictional-token',transport:async()=>({...response(),json:async()=>body})}),e=>e.code==='SERVER');
 });
+test('attributed synthetic citation labels dataset and terms without inventing a product-detail link',async()=>{
+ const {requestRag}=load();const a={datasetName:'합성 데이터셋',itemCode:'990000001',datasetUrl:'https://example.org/synthetic-dataset',termsLabel:'합성 테스트 이용조건',termsUrl:'https://example.org/synthetic-terms'};
+ const body={status:'local_evidence',message:'합성 검색 결과',disclaimer:'실제 의료자료가 아닙니다',sources:[{documentId:'synthetic',chunkId:'synthetic:1:0',title:'합성 문서',quote:'합성 색상 표식 문장입니다.',publisher:'합성 제공기관',updatedAt:'2026-11-03',sourceUrl:a.datasetUrl,attribution:a}]};
+ const options={url:'https://rag.example',development:false,token:async()=>'synthetic-token',transport:async()=>({...response(),json:async()=>body})};
+ const text=await requestRag('합성 표식',options);
+ for(const expected of ['제공기관: 합성 제공기관','데이터셋명: 합성 데이터셋','품목기준코드: 990000001','원본 갱신일: 2026-11-03','이용 조건: 합성 테스트 이용조건','이용 조건 근거: https://example.org/synthetic-terms','공식 데이터셋 링크: https://example.org/synthetic-dataset'])assert.ok(text.includes(expected));
+ assert.ok(!text.includes('검증된 상세페이지'));
+ body.sources[0].attribution.termsUrl='javascript:alert(1)';
+ await assert.rejects(requestRag('합성 표식',options),e=>e.code==='SERVER');
+});

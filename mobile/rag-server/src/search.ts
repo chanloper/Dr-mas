@@ -1,7 +1,9 @@
 ﻿export const insufficientEvidenceMessage='확인된 자료가 부족하여 답변할 수 없습니다';
 import { normalize, type MedicalDocument, type State, type Chunk } from './model.js';
 import {hasPermission,hasChunkPermission} from './rights.js';
-export interface Hit { documentId:string; chunkId:string; title:string; publisher:string; sourceUrl:string; updatedAt:string|null; version:number; text:string; score:number; keywordScore:number; vectorScore:number|null }
+import {sourceAttribution} from './attribution.js';
+import type {SourceAttribution} from './model.js';
+export interface Hit { documentId:string; chunkId:string; title:string; publisher:string; sourceUrl:string; updatedAt:string|null; version:number; text:string; score:number; keywordScore:number; vectorScore:number|null;attribution?:SourceAttribution }
 export interface SearchOptions { limit:number; minKeyword:number; minVector:number }
 export const defaults:SearchOptions={limit:5,minKeyword:0.2,minVector:0.75}; // Provisional: calibrate using an independent evaluation set.
 export function tokens(text:string):string[] { return [...new Set(normalize(text).match(/[\p{L}\p{N}]+/gu)??[])]; }
@@ -40,7 +42,7 @@ export class SearchIndex {
       const vector=queryVector && stored?.profile===queryVector.profile?cosine(queryVector.values,stored.values):null;
       if(lexical<cfg.minKeyword && (vector===null || vector<cfg.minVector))continue;
       const score=queryVector?0.55*lexical+0.45*Math.max(0,vector??0):lexical;
-      scored.push({documentId:d.id,chunkId:id,title:d.title,publisher:d.publisher,sourceUrl:d.sourceUrl,updatedAt:d.updatedAt,version:d.version,text:hasPermission(d,'quotation')?c.text:'',score,keywordScore:lexical,vectorScore:vector});
+      scored.push({documentId:d.id,chunkId:id,title:d.title,publisher:d.publisher,sourceUrl:d.sourceUrl,updatedAt:d.updatedAt,version:d.version,text:hasPermission(d,'quotation')?c.text:'',score,keywordScore:lexical,vectorScore:vector,attribution:sourceAttribution(d)});
     }
     scored.sort((a,b)=>b.score-a.score || a.chunkId.localeCompare(b.chunkId));
     const hits:Hit[]=[]; const seen=new Set<string>();

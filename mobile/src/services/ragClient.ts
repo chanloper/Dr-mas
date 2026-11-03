@@ -60,6 +60,27 @@ export async function requestRag(question: string, options: {
         if (source.protocol !== 'https:' || source.username || source.password) throw new RagError('SERVER');
         if (v.publisher !== undefined && (typeof v.publisher !== 'string' || v.publisher.length > 500)) throw new RagError('SERVER');
         if (v.updatedAt !== undefined && v.updatedAt !== null && (typeof v.updatedAt !== 'string' || !Number.isFinite(Date.parse(v.updatedAt)))) throw new RagError('SERVER');
+        if (v.attribution !== undefined) {
+          if (!v.attribution || typeof v.attribution !== 'object' || Array.isArray(v.attribution)) throw new RagError('SERVER');
+          const a = v.attribution as Record<string, unknown>;
+          for (const k of ['datasetName', 'datasetUrl', 'itemCode', 'termsLabel', 'termsUrl']) {
+            if (typeof a[k] !== 'string' || !a[k] || a[k].length > 2000) throw new RagError('SERVER');
+          }
+          const checkLink = (value: unknown) => {
+            if (typeof value !== 'string' || value.length > 2000) throw new RagError('SERVER');
+            let u: URL; try { u = new URL(value); } catch { throw new RagError('SERVER'); }
+            if (u.protocol !== 'https:' || u.username || u.password || u.hash) throw new RagError('SERVER');
+            return u.href;
+          };
+          const datasetLink = checkLink(a.datasetUrl), termsLink = checkLink(a.termsUrl);
+          if (datasetLink !== source.href || typeof v.publisher !== 'string' || !v.publisher) throw new RagError('SERVER');
+          let detail = '';
+          if (a.verifiedDetailUrl !== undefined || a.detailVerifiedAt !== undefined) {
+            if (typeof a.detailVerifiedAt !== 'string' || !Number.isFinite(Date.parse(a.detailVerifiedAt))) throw new RagError('SERVER');
+            detail = `\n검증된 상세페이지: ${checkLink(a.verifiedDetailUrl)}\n상세 링크 확인일: ${a.detailVerifiedAt}`;
+          }
+          return `${v.quote}\n출처: ${v.title} [${v.documentId}]\n근거 ID: ${v.chunkId}\n제공기관: ${v.publisher}\n데이터셋명: ${a.datasetName}\n품목기준코드: ${a.itemCode}\n원본 갱신일: ${v.updatedAt ?? '미확인'}\n이용 조건: ${a.termsLabel}\n이용 조건 근거: ${termsLink}\n공식 데이터셋 링크: ${datasetLink}${detail}`;
+        }
         const details = [v.publisher, v.updatedAt ? `갱신일: ${v.updatedAt}` : null].filter(Boolean).join(' · ');
         return `${v.quote}\n출처: ${v.title} [${v.documentId}]\n근거 ID: ${v.chunkId}${details ? `\n${details}` : ''}\n${v.sourceUrl}`;
       });

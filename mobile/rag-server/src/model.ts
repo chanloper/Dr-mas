@@ -2,10 +2,15 @@
 import { createHash } from 'node:crypto';
 import {validateScopes,type ScopeDecisions} from './rights.js';
 export const categories = ['disease','medicine','medication','lifestyle','caregiver'] as const;
+export interface SourceAttribution {
+ datasetName:string;datasetUrl:string;itemCode:string;termsLabel:string;termsUrl:string;
+ verifiedDetailUrl?:string;detailVerifiedAt?:string;
+}
 export interface DocumentInput {
   id: string; title: string; publisher: string; sourceUrl: string;
   publishedAt: string | null; updatedAt: string | null; collectedAt: string;
   category: typeof categories[number]; content: string;
+  attribution?:SourceAttribution;
   rights: { terms: string; permission: 'permitted' | 'test-only' | 'pending'; checkedAt: string;scopes?:ScopeDecisions };
 }
 export interface MedicalDocument extends DocumentInput { contentHash: string; version: number }
@@ -28,6 +33,17 @@ export function validateDocument(value: unknown): DocumentInput {
     if (d[key] !== null && (typeof d[key] !== 'string' || !Number.isFinite(Date.parse(d[key])))) throw new Error(`INVALID_${key}`);
   if (!d.rights || !['permitted','test-only','pending'].includes(d.rights.permission) || !d.rights.terms?.trim() || !Number.isFinite(Date.parse(d.rights.checkedAt))) throw new Error('RIGHTS_REQUIRED');
   validateScopes(d.rights.scopes);
+  if(d.attribution!==undefined){
+    const a=d.attribution;
+    if(!a||typeof a!=='object'||Array.isArray(a))throw Error('INVALID_ATTRIBUTION');
+    for(const k of ['datasetName','itemCode','termsLabel'] as const)if(typeof a[k]!=='string'||!a[k].trim()||a[k].length>500)throw Error('INVALID_ATTRIBUTION');
+    for(const k of ['datasetUrl','termsUrl','verifiedDetailUrl'] as const){
+      if(k==='verifiedDetailUrl'&&a[k]===undefined)continue;
+      if(typeof a[k]!=='string'||!a[k]||a[k]!.length>2000)throw Error('INVALID_ATTRIBUTION');
+      const link=new URL(a[k]!);if(link.protocol!=='https:'||link.username||link.password||link.hash)throw Error('INVALID_ATTRIBUTION');
+    }
+    if((a.verifiedDetailUrl!==undefined)!==(a.detailVerifiedAt!==undefined)||a.detailVerifiedAt!==undefined&&(typeof a.detailVerifiedAt!=='string'||!Number.isFinite(Date.parse(a.detailVerifiedAt))))throw Error('INVALID_ATTRIBUTION');
+  }
   for(const value of [d.title,d.publisher,d.content,d.rights.terms])assertTextIntegrity(value);
   return structuredClone(d);
 }
