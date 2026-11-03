@@ -10,7 +10,7 @@ const compile = relative => ts.transpileModule(fs.readFileSync(path.join(__dirna
 const controller = compile('features/app/useDrMASController.ts');
 const service = compile('services/localMedications.ts');
 
-function createHarness({ auth, storage, alerts = [], DateImpl = Date }) {
+function createHarness({ auth, storage, alerts = [], DateImpl = Date, rag = { sendRagChat: async () => '확인된 자료가 부족하여 답변할 수 없습니다', ragErrorMessage: () => 'RAG 오류' } }) {
   const local = { exports: {}, require: () => ({ __esModule: true, default: storage }) };
   vm.runInNewContext(service, local);
   function mount() {
@@ -48,6 +48,7 @@ function createHarness({ auth, storage, alerts = [], DateImpl = Date }) {
         } };
         if (name === '../../services/localMedications') return local.exports;
         if (name === '../../services/auth') return auth;
+        if (name === '../../services/rag') return rag;
         throw Error(`unexpected import: ${name}`);
       },
       setTimeout: callback => { const id = {}; timers.set(id, callback); return id; },

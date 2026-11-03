@@ -6,7 +6,7 @@ import { Action, C, Panel, s } from '../components/ui';
 export default function AiScreen() {
   const { messages, chatInput, setChatInput, sendChat } = useDrMAS();
     return <><Text style={s.h1}>AI 건강 상담</Text><Text style={[s.paragraph, { marginTop: 8, marginBottom: 16 }]}>건강에 대한 궁금증을 편하게 남겨보세요.</Text>
-      <View style={s.alertSoft}><Text style={s.alertSoftText}>ⓘ AI 상담 서비스가 아직 연결되지 않았습니다. 현재 입력한 메시지에는 자동 의료 상담이 제공되지 않습니다.</Text></View>
+      <View style={s.alertSoft}><Text style={s.alertSoftText}>ⓘ 개인정보 없이 일반 질문만 입력하세요. 확인된 자료를 검색하며 자동 의료 상담이 제공되지 않습니다.</Text></View>
       <Panel style={{ marginTop: 15, padding: 14 }}>
         {messages.map(m => <View key={m.id} style={[s.bubble, m.sender === 'user' ? s.bubbleUser : s.bubbleAssistant]}><Text style={{ color: m.sender === 'user' ? C.white : C.ink, fontSize: 14, lineHeight: 21 }}>{m.text}</Text></View>)}
       </Panel>

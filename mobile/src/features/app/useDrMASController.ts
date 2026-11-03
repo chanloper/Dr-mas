@@ -3,6 +3,7 @@ import { Alert, AppState } from 'react-native';
 import { localMedications, LocalMedicationError } from '../../services/localMedications';
 import type { Role, Route, Tab, Medication, Chat } from './types';
 import * as auth from '../../services/auth';
+import { sendRagChat, ragErrorMessage } from '../../services/rag';
 const seedMeds: Medication[] = [
   { id: '1', title: '아침 복약', detail: '예시 일정 · 식후', time: '08:00', taken: false },
   { id: '2', title: '점심 복약', detail: '예시 일정 · 식후', time: '13:00', taken: false },
@@ -14,7 +15,7 @@ function todayKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 const initialMessages = (): Chat[] => [
-  { id: 1, sender: 'assistant', text: '안녕하세요. Dr.MAS 건강 상담입니다. 현재 AI 상담 서비스 연결을 준비하고 있습니다.' },
+  { id: 1, sender: 'assistant', text: '안녕하세요. 일반 건강정보 자료를 검색합니다. 개인정보나 진료·복약 기록은 입력하지 마세요.' },
 ];
 
 export function useDrMASController() {
@@ -36,6 +37,7 @@ export function useDrMASController() {
   const authBusy = useRef(true);
   const sessionEpoch = useRef(0);
   const owner = useRef<string | null>(null);
+  const chatBusy = useRef(false);
   const record = useRef<{ userId: string; day: string; ids: string[]; epoch: number; busy: boolean } | null>(null);
   const loadEpoch = useRef(0);
   const [meds, setMeds] = useState<Medication[]>([]);
@@ -250,11 +252,20 @@ export function useDrMASController() {
     loadEpoch.current++; record.current = null; setMeds([]); setMedsReady(false); setMedsError(null);
     setMedsReload(value => value + 1);
   }
-  function sendChat() {
+  async function sendChat() {
     const text = chatInput.trim(); if (!text || !owner.current) return;
-    setMessages(old => [...old, { id: messageCounter.current++, sender: 'user', text },
-      { id: messageCounter.current++, sender: 'assistant', text: '지금은 AI 상담 서비스를 사용할 수 없습니다. 입력한 내용에 대한 자동 의료 상담은 제공하지 않습니다. 응급 증상이 있다면 즉시 119에 연락하세요.' }]);
+    if (chatBusy.current) return;
+    chatBusy.current = true;
+    const epoch = sessionEpoch.current;
+    const userId = owner.current;
+    setMessages(old => [...old, { id: messageCounter.current++, sender: 'user', text }]);
     setChatInput('');
+    try {
+      const reply = await sendRagChat(text);
+      if (sessionEpoch.current === epoch && owner.current === userId) setMessages(old => [...old, { id: messageCounter.current++, sender: 'assistant', text: reply }]);
+    } catch (error) {
+      if (sessionEpoch.current === epoch && owner.current === userId) setMessages(old => [...old, { id: messageCounter.current++, sender: 'assistant', text: ragErrorMessage(error) }]);
+    } finally { chatBusy.current = false; }
   }
   function startSOS() {
     if (!owner.current) return;

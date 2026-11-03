@@ -1,6 +1,6 @@
 ﻿# Dr.MAS medical information RAG server
 
-기존 모바일 앱과 별개로 실행하는 Node.js 24 LTS / TypeScript 서버 모듈입니다. 이 변경은 `mobile/rag-server/`만 추가하며 모바일 소스·설정·Supabase·Vercel과 연결하거나 배포하지 않습니다.
+Node.js 24 LTS / TypeScript 서버 모듈입니다. 인증된 로컬 자료 검색 HTTP API와 모바일 클라이언트 연결 구조는 [HTTP API 안내](docs/http-api.md)를 참고하세요. HTTP 모드는 Gemini를 호출하지 않으며 실제 배포·원격 연결 검증은 별도입니다.
 
 ## 설치와 검사
 

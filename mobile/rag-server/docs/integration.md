@@ -19,7 +19,7 @@
 
 ## 인증 서버 계약
 
-현재 HTTP 서버는 없습니다. Node 인증 서버가 SDK와 저장소를 소유하도록 통합하세요. 앱에 GEMINI_API_KEY를 전달하면 안 됩니다.
+인증된 로컬 자료 검색 HTTP 서버는 `src/server.ts`에 있습니다. 설정과 제한은 [HTTP API 안내](http-api.md)를 참고하세요. HTTP 경로는 Gemini SDK를 호출하지 않습니다. 앱에 GEMINI_API_KEY를 전달하면 안 됩니다.
 
 제안 요청: POST /v1/health-information/query, Authorization: Bearer <Supabase access token>, JSON {question, mode: "search" | "quotes"}. 여기의 경로는 새로 만들 내부 서버 계약 제안이며 외부 공공 API 경로가 아닙니다.
 
