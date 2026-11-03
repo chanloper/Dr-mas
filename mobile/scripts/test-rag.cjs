@@ -48,3 +48,11 @@ test('controller shows safe failure and discards response on unmount',async()=>{
  let resolve;const other=mountChat({sendRagChat:()=>new Promise(r=>{resolve=r;}),ragErrorMessage:()=> '오류'});
  await other.flush();other.state.setChatInput('일반 질문');const pending=other.state.sendChat();other.dispose();resolve('late');await pending;assert.equal(other.lateUpdates,0);
 });
+test('synthetic citation shows warning, exact source id, publisher and update date without changing UI',async()=>{
+ const {requestRag}=load();
+ const body={status:'local_evidence',message:'자료 인용',mode:'synthetic',disclaimer:'합성 테스트 자료입니다. 실제 의료정보나 복약 지침이 아닙니다.',sources:[{documentId:'synthetic_card_alpha',chunkId:'synthetic_card_alpha:1:0',title:'[합성 테스트] 알파 안내카드',sourceUrl:'https://example.org/drmas-synthetic/alpha',quote:'합성안내카드알파의 색상 표식은 파랑입니다.',publisher:'Dr.MAS 합성 테스트',updatedAt:'2026-11-03'}]};
+ const text=await requestRag('합성안내카드알파',{url:'https://rag.example',development:false,token:async()=>'fictional-token',transport:async()=>({...response(),json:async()=>body})});
+ for(const expected of ['실제 의료정보나 복약 지침이 아닙니다','[합성 테스트] 알파 안내카드 [synthetic_card_alpha]','근거 ID: synthetic_card_alpha:1:0','Dr.MAS 합성 테스트','갱신일: 2026-11-03',body.sources[0].quote])assert.ok(text.includes(expected));
+ body.sources[0].updatedAt='invalid-date';
+ await assert.rejects(requestRag('합성안내카드알파',{url:'https://rag.example',development:false,token:async()=>'fictional-token',transport:async()=>({...response(),json:async()=>body})}),e=>e.code==='SERVER');
+});

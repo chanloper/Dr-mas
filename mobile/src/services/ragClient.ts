@@ -58,7 +58,10 @@ export async function requestRag(question: string, options: {
         }
         const source = new URL(v.sourceUrl as string);
         if (source.protocol !== 'https:' || source.username || source.password) throw new RagError('SERVER');
-        return `${v.quote}\n출처: ${v.title} [${v.documentId}]\n${v.sourceUrl}`;
+        if (v.publisher !== undefined && (typeof v.publisher !== 'string' || v.publisher.length > 500)) throw new RagError('SERVER');
+        if (v.updatedAt !== undefined && v.updatedAt !== null && (typeof v.updatedAt !== 'string' || !Number.isFinite(Date.parse(v.updatedAt)))) throw new RagError('SERVER');
+        const details = [v.publisher, v.updatedAt ? `갱신일: ${v.updatedAt}` : null].filter(Boolean).join(' · ');
+        return `${v.quote}\n출처: ${v.title} [${v.documentId}]\n근거 ID: ${v.chunkId}${details ? `\n${details}` : ''}\n${v.sourceUrl}`;
       });
       if (r.status === 'local_evidence' && !quotes.length) throw new RagError('SERVER');
       return [r.message, ...quotes, r.disclaimer].join('\n\n');

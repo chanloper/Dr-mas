@@ -44,3 +44,27 @@ does not retry, and distinguishes login/network/timeout/server/rate-limit errors
 Session changes suppress late replies. A future Gemini mode needs separate
 approval, privacy/consent design, corpus permission review and durable cost limits;
 this HTTP route intentionally has no switch enabling external AI transmission.
+
+## Isolated synthetic retrieval checks
+
+`npm run synthetic:check` runs fixed in-memory search and source assertions with
+zero network calls and prints only a summary. No credentials or .env are needed.
+
+An optional development server mode `RAG_CORPUS_MODE=synthetic` uses that same
+isolated corpus instead of reading data/local. It still requires real Auth for
+HTTP clients; no authentication bypass exists. Production rejects this mode.
+Do not start another live device test without a separate need/approval. No private
+.env files are changed by adding this feature. Default mode remains `local`.
+
+The fixed queries are synthetic card markers in Korean:
+`합성안내카드알파` and `합성안내카드베타`. Documents contain only fictional color
+and shape labels, never drug facts. Titles/disclaimers visibly say synthetic.
+example.org URLs are fixture identifiers, not real medical references, and are
+never fetched. Sources retain document/chunk IDs, title, quote, publisher and
+update date. Mobile renders them inside the existing message bubble.
+
+Synthetic documents retain `test-only` rights. Default HTTP search excludes them;
+the isolated mode accepts only matching fixed content hashes. Pending/real corpus
+documents cannot enter this mode. No ingestion, persistent store, patient data,
+Gemini calls or semantic embeddings are involved. This tests keyword retrieval
+and citation display, not medical accuracy or semantic model quality.

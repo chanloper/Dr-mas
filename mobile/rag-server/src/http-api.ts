@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { answer } from './answer.js';
 import type { Repository } from './repository.js';
+import { hash } from './model.js';
 
 export const disclaimer='참고용 일반 정보이며 진단·처방이나 의료진의 판단을 대신하지 않습니다.';
 export class ApiError extends Error {
@@ -21,13 +22,21 @@ export function supabaseVerifier(url:string,key:string,transport:typeof fetch=fe
  };
 }
 // Public, rights-reviewed corpus only; no patient data, Gemini or writes in HTTP mode.
-export async function localChat(repo:Repository,question:string) {
+export async function localChat(repo:Repository,question:string,options:{syntheticDocuments?:ReadonlyMap<string,string>}={}) {
  const state=structuredClone(await repo.read());
- for(const [id,c] of Object.entries(state.chunks))if(state.documents[c.documentId]?.rights.permission!=='permitted'){delete state.chunks[id];delete state.vectors[id];}
+ for(const [id,c] of Object.entries(state.chunks)){
+  const d=state.documents[c.documentId];
+  const eligible=options.syntheticDocuments
+   ?d?.rights.permission==='test-only'&&options.syntheticDocuments.get(d.id)===hash(d.content)&&d.content.slice(c.start,c.end)===c.text
+   :d?.rights.permission==='permitted';
+  if(!eligible){delete state.chunks[id];delete state.vectors[id];}
+ }
  const result=await answer({read:async()=>state,transaction:async()=>{throw new Error('READ_ONLY');}},question);
  const hits=('hits' in result?result.hits:[])??[];
- return {status:result.status,message:result.message,disclaimer,mode:'local' as const,
-  sources:hits.map(h=>({documentId:h.documentId,chunkId:h.chunkId,title:h.title,sourceUrl:h.sourceUrl,quote:h.text}))};
+ return {status:result.status,message:result.message,
+  disclaimer:options.syntheticDocuments?'합성 테스트 자료입니다. 실제 의료정보나 복약 지침이 아닙니다. '+disclaimer:disclaimer,
+  mode:options.syntheticDocuments?'synthetic' as const:'local' as const,
+  sources:hits.map(h=>({documentId:h.documentId,chunkId:h.chunkId,title:h.title,sourceUrl:h.sourceUrl,quote:h.text,publisher:h.publisher,updatedAt:h.updatedAt}))};
 }
 export function createRagServer(options:{verify:(token:string,signal:AbortSignal)=>Promise<string>;chat:(question:string)=>Promise<Awaited<ReturnType<typeof localChat>>>;origins?:string[];timeoutMs?:number;rateLimit?:number;now?:()=>number;observeOnce?:(result:{httpStatus:number;responseType:string})=>void}) {
  let observationAvailable=!!options.observeOnce;

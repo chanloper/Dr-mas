@@ -9,6 +9,7 @@
     "scripts":  {
                     "check":  "tsc --noEmit",
                     "serve": "tsx src/server.ts",
+                    "synthetic:check": "tsx src/synthetic-check.ts",
                     "test":  "tsx --test test/*.test.ts",
                     "cli":  "tsx src/cli.ts",
                     "mfds:pilot": "tsx src/mfds-pilot.ts",
