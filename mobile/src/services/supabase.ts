@@ -7,6 +7,12 @@ import { logAuthDiagnostic } from './authDiagnostics';
 export class SupabaseConfigError extends Error {}
 let client: SupabaseClient | undefined;
 let sessionKey: string | undefined;
+let clientOrigin: string | undefined;
+
+// Boolean-only check for development diagnostics; never exposes configuration.
+export function matchesSupabaseProject(expectedRef: string): boolean {
+  return !!client && /^[a-z0-9-]+$/.test(expectedRef) && clientOrigin === `https://${expectedRef}.supabase.co`;
+}
 
 export function getSupabaseClient(): SupabaseClient {
   if (client) return client;
@@ -53,6 +59,7 @@ export function getSupabaseClient(): SupabaseClient {
     },
   });
   logAuthDiagnostic('client_init', 'success');
+  clientOrigin = parsed.origin;
   return client;
 }
 

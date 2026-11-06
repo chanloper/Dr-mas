@@ -6,7 +6,8 @@ const vm = require('node:vm');
 const ts = require('typescript');
 function load(relative, mocks = {}, globals = {}) {
   const source = ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', relative), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    fileName: relative,
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const context = { exports: {}, Date, Intl, require: name => { if (Object.hasOwn(mocks, name)) return mocks[name]; throw Error(`unexpected import: ${name}`); }, ...globals };
   vm.runInNewContext(source, context); return context.exports;
@@ -14,6 +15,78 @@ function load(relative, mocks = {}, globals = {}) {
 const A = '00000000-0000-4000-8000-000000000001', B = '00000000-0000-4000-8000-000000000002', ID = '10000000-0000-4000-8000-000000000001';
 const row = { id: ID, patient_id: A, title: '가상 일정', detail: '', time_local: '08:00:00', timezone: 'Asia/Seoul', active: true };
 const input = { title: '가상 일정', detail: '', time_local: '08:00' };
+function dashboardFixture(links, medications) {
+  const jsx = (type, props) => ({ type, props });
+  const components = load('src/components/DashboardSummaries.tsx', {
+    'react/jsx-runtime': { jsx, jsxs: jsx }, 'react-native': { Text:'Text', View:'View' },
+    '../features/care/useCareLinks': { useCareLinks: () => links },
+    '../features/medications/useCloudMedications': { useCloudMedications: () => medications },
+    './ui': { Action:'Action', Chip:'Chip', Panel:'Panel', StatusMessage:'StatusMessage', TitleRow:'TitleRow', C:{ green:'#047857' }, s:{} },
+  });
+  const nodes = value => Array.isArray(value) ? value.flatMap(nodes) : value && typeof value === 'object' ? [value, ...nodes(value.props?.children)] : [];
+  return { components, nodes };
+}
+test('guardian home summary shows approved links only and keeps existing navigation callbacks', () => {
+  let managed = 0, medication = 0;
+  const f = dashboardFixture({ ready:true, busy:false, error:null, hasMore:false, rows:[{ id:'approved', patient_id:A, status:'approved' }, { id:'pending', patient_id:B, status:'pending' }], refresh() {} });
+  const tree = f.components.ConnectedFamilySummary({ guardianId:A, onManage:()=>managed++, onMedication:()=>medication++ });
+  const nodes = f.nodes(tree);
+  assert.equal(nodes.filter(n => n.type === 'Chip' && n.props.text === '승인됨').length, 1);
+  nodes.find(n=>n.type==='Action' && n.props.label==='가족 연결 관리').props.onPress();
+  nodes.find(n=>n.type==='Action' && n.props.label==='가족 복약 조회').props.onPress();
+  assert.equal(managed, 1); assert.equal(medication, 1);
+});
+test('unverified guardian summary hides stale links and keeps loading/error states', () => {
+  const f = dashboardFixture({ ready:false, busy:true, error:'합성 연결 오류', rows:[{ id:'stale', patient_id:A, status:'approved' }], refresh() {} });
+  const nodes = f.nodes(f.components.ConnectedFamilySummary({ guardianId:A, onManage() {}, onMedication() {} }));
+  assert.equal(nodes.filter(n=>n.type==='Chip').length, 0);
+  assert.equal(nodes.find(n=>n.type==='Action' && n.props.label==='가족 복약 조회').props.disabled, true);
+  assert.ok(nodes.some(n=>n.type==='StatusMessage' && n.props.kind==='loading'));
+  assert.ok(nodes.some(n=>n.type==='StatusMessage' && n.props.kind==='error'));
+});
+test('patient home progress uses verified active schedules and their real records only', () => {
+  const medications = { ready:true, busy:false, error:null, day:'2026-11-07', schedules:[row, { ...row, id:'archived', active:false }], records:[{ medication_id:row.id, taken:true }, { medication_id:'archived', taken:true }], refresh() {} };
+  const f = dashboardFixture({}, medications);
+  const nodes = f.nodes(f.components.PatientMedicationSummary({ user:{ id:A, role:'patient' }, onOpen() {} }));
+  const progress = nodes.find(n=>n.props.accessibilityRole==='progressbar'); assert.equal(progress.props.accessibilityValue.max, 1); assert.equal(progress.props.accessibilityValue.now, 1);
+  medications.ready = false;
+  const stale = f.nodes(f.components.PatientMedicationSummary({ user:{ id:A, role:'patient' }, onOpen() {} }));
+  assert.equal(stale.some(n=>n.props.accessibilityRole==='progressbar'), false);
+});
+test('compact modal keeps scrollable content and a reachable close action; busy modal blocks hardware close', () => {
+  const jsx = (type, props) => ({ type, props }); let closed = 0;
+  const mocks = { 'react/jsx-runtime': { jsx, jsxs:jsx },
+    'react-native': { Modal:'Modal', KeyboardAvoidingView:'KeyboardAvoidingView', ScrollView:'ScrollView', Text:'Text', View:'View', Platform:{ OS:'android' }, useWindowDimensions:()=>({ width:320, height:420 }) },
+    'react-native-safe-area-context':{ useSafeAreaInsets:()=>({ top:24, bottom:20, left:0, right:0 }) },
+    './ui':{ Action:'Action', C:{ white:'#fff', line:'#eee' }, s:{} },
+  };
+  const { FeatureModal } = load('src/components/FeatureModal.tsx', mocks);
+  const nodes = value => Array.isArray(value) ? value.flatMap(nodes) : value && typeof value === 'object' ? [value,...nodes(value.props?.children)] : [];
+  const modal = FeatureModal({ visible:true, title:'긴 화면 제목', onClose:()=>closed++, children:'긴 내용'.repeat(200) });
+  const all = nodes(modal), scroll = all.find(n=>n.type==='ScrollView');
+  assert.equal(scroll.props.style.flexShrink, 1); assert.equal(scroll.props.style.minHeight, 0); assert.equal(scroll.props.keyboardShouldPersistTaps, 'handled');
+  all.find(n=>n.type==='Action').props.onPress(); modal.props.onRequestClose(); assert.equal(closed, 2);
+  const busy = FeatureModal({ visible:true, title:'처리 중', onClose:()=>closed++, closeDisabled:true, children:'합성 내용' });
+  busy.props.onRequestClose(); assert.equal(closed, 2); assert.equal(nodes(busy).find(n=>n.type==='Action').props.disabled, true);
+});
+test('AI composer stacks on compact and large-font screens without changing input/send behavior', () => {
+  const jsx = (type, props) => ({ type, props }); let width = 360, fontScale = 1, sent = 0, input = '';
+  const model = { messages:[], chatInput:'합성 질문', setChatInput:v=>{input=v;}, sendChat:async()=>{sent++;}, chatLoading:false, cancelChat() {} };
+  const { default: AiScreen } = load('src/screens/AiScreen.tsx', {
+    react:{ useState:initial=>[initial,()=>{}] }, 'react/jsx-runtime':{ jsx, jsxs:jsx },
+    'react-native':{ Text:'Text', TextInput:'TextInput', View:'View', useWindowDimensions:()=>({ width,fontScale }) },
+    '../features/app/context':{ useDrMAS:()=>model }, '../components/ui':{ Action:'Action', Panel:'Panel', StatusMessage:'StatusMessage', C:{}, s:{} },
+    '../components/EvidenceDetailsModal':{ EvidenceDetailsModal:'EvidenceDetailsModal' }, '../components/FeatureModal':{ FeatureModal:'FeatureModal' }, '../services/rag':{ ragConfigured:()=>true },
+  });
+  const nodes = value => Array.isArray(value) ? value.flatMap(nodes) : value && typeof value === 'object' ? [value,...nodes(value.props?.children)] : [];
+  let all = nodes(AiScreen());
+  assert.ok(all.some(n=>n.type==='View' && n.props.style?.flexDirection==='column'));
+  all.find(n=>n.type==='TextInput').props.onChangeText('다른 합성 질문'); assert.equal(input, '다른 합성 질문');
+  all.find(n=>n.type==='Action' && n.props.label==='전송').props.onPress(); assert.equal(sent, 1);
+  width=800; fontScale=1.5; all=nodes(AiScreen()); assert.ok(all.some(n=>n.type==='View' && n.props.style?.flexDirection==='column'));
+  fontScale=1; all=nodes(AiScreen()); assert.ok(all.some(n=>n.type==='View' && n.props.style?.flexDirection==='row'));
+  model.chatInput=''; all=nodes(AiScreen()); assert.equal(all.find(n=>n.type==='Action' && n.props.label==='전송').props.disabled, true);
+});
 function repositoryFixture() {
   const requests = []; let actor = A, result = { data: row, error: null };
   const client = { auth: { getUser: async () => ({ data: { user: { id: actor } }, error: null }) }, from(table) {
@@ -23,6 +96,7 @@ function repositoryFixture() {
       eq(key, value) { request.filters.push([key, value]); return chain; },
       insert(value) { request.operation = 'insert'; request.payload = value; return chain; },
       update(value) { request.operation = 'update'; request.payload = value; return chain; },
+      delete() { request.operation = 'delete'; return chain; },
       upsert(value, options) { request.operation = 'upsert'; request.payload = value; request.options = options; return chain; },
       single: async () => result, then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
     }; return chain;
@@ -88,9 +162,21 @@ test('server reads reject other-owner rows and server error details are never ex
 });
 test('cloud layer has no local import, RLS bypass, or automatic retry path; public search remains disabled', () => {
   const repo = fs.readFileSync(path.join(__dirname, '../src/services/medicationRepository.ts'), 'utf8');
-  assert.equal(/AsyncStorage|service_role|sb_secret_|\.delete\(/.test(repo), false);
+  assert.equal(/AsyncStorage|service_role|sb_secret_/.test(repo), false);
   assert.match(fs.readFileSync(path.join(__dirname, '../../supabase/functions/search-places/.env.example'), 'utf8'), /SEARCH_PUBLIC_ENABLED=false/);
   const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../vercel.json'), 'utf8')); assert.equal(vercel.buildCommand, 'npm run build:web');
+});
+
+test('explicit deletion verifies the actor and owner, preserves existing records through FK refusal', async () => {
+  const f = repositoryFixture(); f.setResult({ data: { id: ID }, error: null });
+  await f.repo.remove(A, ID);
+  assert.equal(f.requests[0].operation, 'delete');
+  assert.deepEqual(f.requests[0].filters, [['id', ID], ['patient_id', A]]);
+  f.setResult({ data: null, error: { code: '23503', message: 'private detail' } });
+  await assert.rejects(f.repo.remove(A, ID), e => e.code === 'INPUT' && !e.message.includes('private'));
+  assert.ok(f.requests.every(request => request.table === 'medications'));
+  f.setActor(B); const count = f.requests.length;
+  await assert.rejects(f.repo.remove(A, ID), e => e.code === 'AUTH'); assert.equal(f.requests.length, count);
 });
 
 function mountCloud(repository) {

@@ -40,7 +40,7 @@ function createHarness({ auth, storage, alerts = [], DateImpl = Date, rag = { se
       },
     };
     const sandbox = {
-      exports: {}, Date: DateImpl,
+      exports: {}, Date: DateImpl, AbortController,
       require: name => {
         if (name === 'react') return hooks;
         if (name === 'react-native') return { Alert: { alert: (...args) => alerts.push(args) }, AppState: {

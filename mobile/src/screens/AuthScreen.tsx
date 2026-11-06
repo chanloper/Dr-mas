@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Link } from 'expo-router';
 import { ActivityIndicator, AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useDrMAS } from '../features/app/context';
-import { Action, C, Chip, Field, Panel, s } from '../components/ui';
+import { Action, C, Chip, Field, Panel, StatusMessage, s } from '../components/ui';
 
 function PasswordToggle({ label, visible, disabled, onPress }: { label: string; visible: boolean; disabled: boolean; onPress: () => void }) {
   const title = `${label} ${visible ? '숨기기' : '보기'}`;
@@ -29,7 +29,7 @@ export default function AuthScreen() {
   function clearPasswords() { setPassword(''); setConfirm(''); setShowPassword(false); setShowConfirmPassword(false); }
   function submit() { if (authLoading) return; Keyboard.dismiss(); void submitAuth(); }
     return <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={[s.page, { flexGrow: 1, justifyContent: 'center', paddingBottom: 48 }]}>
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets contentContainerStyle={[s.page, s.authPage, { flexGrow: 1, justifyContent: 'center', paddingBottom: 48 }]}>
         <Pressable accessibilityRole="button" disabled={authLoading} accessibilityState={{ disabled: authLoading }} onPress={() => { Keyboard.dismiss(); setRoute('welcome'); clearPasswords(); setAuthError(null); setAuthNotice(null); }} style={s.back}><Text style={s.backText}>‹  역할 선택으로 돌아가기</Text></Pressable>
         <Link href="/places" asChild><Pressable accessibilityRole="link" disabled={authLoading} onPress={() => { Keyboard.dismiss(); clearPasswords(); }} style={{ paddingVertical: 12 }}><Text style={s.link}>로그인 없이 병원 · 약국 찾기 →</Text></Pressable></Link>
         <View style={s.brandMark}><Text style={s.brandSymbol}>✚</Text></View>
@@ -54,13 +54,13 @@ export default function AuthScreen() {
             <PasswordToggle label="비밀번호 확인" visible={showConfirmPassword} disabled={authLoading} onPress={() => setShowConfirmPassword(value => !value)} />
           </>}
           {authNotice && <View style={[s.alertSoft, { marginBottom: 12 }]}><Text accessibilityLiveRegion="polite" style={s.alertSoftText}>{authNotice}</Text></View>}
-          {authError && <Text accessibilityRole="alert" style={{ color: C.danger, marginBottom: 12 }}>{authError}</Text>}
+          {authError && <StatusMessage kind="error">{authError}</StatusMessage>}
           {authLoading && <View style={[s.row, { gap: 8, marginBottom: 12 }]}><ActivityIndicator color={C.blue} /><Text accessibilityLiveRegion="polite" style={s.paragraph}>{registering ? '가입 요청을 처리하고 있습니다.' : '로그인 정보를 확인하고 있습니다.'}</Text></View>}
           <Action label={authLoading ? '처리 중…' : registering ? '회원가입' : '로그인'} onPress={submit} disabled={authLoading} />
           {signupProcessed ? <View style={{ gap: 8, marginTop: 14 }}>
             <Text style={s.caption}>이미 요청한 계정으로 로그인해 주세요. 다른 계정은 아래 버튼으로 전환할 수 있습니다.</Text>
             <Action label="다른 계정 사용" onPress={signOut} outline small disabled={authLoading} />
-          </View> : <Pressable accessibilityRole="button" disabled={authLoading} accessibilityState={{ disabled: authLoading }} onPress={() => { setAuthError(null); setAuthNotice(null); setRoute(registering ? 'login' : 'register'); clearPasswords(); }} style={{ padding: 14, alignItems: 'center' }}>
+          </View> : role === 'guardian' && !registering ? <StatusMessage>보호자는 승인된 보호자 계정으로 로그인해 주세요. 보호자 계정의 신규 발급이나 역할 변경은 관리자에게 문의해 주세요.</StatusMessage> : <Pressable accessibilityRole="button" disabled={authLoading} accessibilityState={{ disabled: authLoading }} onPress={() => { setAuthError(null); setAuthNotice(null); setRoute(registering ? 'login' : 'register'); clearPasswords(); }} style={{ padding: 14, alignItems: 'center' }}>
             <Text style={s.link}>{route === 'login' ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}</Text>
           </Pressable>}
         </Panel>

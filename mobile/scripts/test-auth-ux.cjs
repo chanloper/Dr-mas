@@ -125,6 +125,13 @@ test('busy auth disables fields and submit; existing-account status does not off
   const fields = ui.nodes.filter(n => n.type === 'Field'); assert.equal(fields[1].props.returnKeyType, 'done'); assert.equal(fields[1].props.autoComplete, 'current-password');
   assert.equal(ui.nodes.find(n => n.type === 'KeyboardAvoidingView').props.behavior, 'height');
 });
+
+test('guardian login does not advertise unsupported self-service guardian signup', () => {
+  const ui = screen({ route: 'login', role: 'guardian', roleLabel: '보호자' });
+  assert.equal(ui.nodes.some(n => typeof n.props?.children === 'string' && n.props.children.includes('계정이 없으신가요? 회원가입')), false);
+  assert.ok(ui.nodes.some(n => typeof n.props?.children === 'string' && n.props.children.includes('승인된 보호자 계정')));
+  assert.ok(ui.nodes.some(n => n.type === 'Action' && n.props.label === '로그인' && n.props.disabled === false));
+});
 test('user screens no longer contain development/student copy while incomplete-service warnings remain', () => {
   const dir = path.join(__dirname, '../src/screens');
   for (const file of fs.readdirSync(dir).filter(file => file.endsWith('.tsx'))) {
@@ -132,5 +139,8 @@ test('user screens no longer contain development/student copy while incomplete-s
     assert.equal(/체험용|시연용|졸업작품|과제|\bMVP\b|\bMAP\b|UI 체험/.test(source), false, file);
   }
   assert.match(fs.readFileSync(path.join(dir, 'AiScreen.tsx'), 'utf8'), /자동 의료 상담이 제공되지 않습니다/);
-  assert.match(fs.readFileSync(path.join(dir, 'PatientHome.tsx'), 'utf8'), /119 신고나 보호자 연락은 이루어지지 않습니다/);
+  assert.match(fs.readFileSync(path.join(dir, 'PatientHome.tsx'), 'utf8'), /<SosPanel/);
+  const sos = fs.readFileSync(path.join(dir, '../components/SosPanel.tsx'), 'utf8');
+  assert.match(sos, /백그라운드 푸시는 지원하지 않습니다/);
+  assert.match(sos, /119 전화 연결이나 자동 신고를 실행하지 않습니다/);
 });

@@ -36,7 +36,7 @@ function record(value: unknown, patient: string, day: string): CloudRecord {
 const fields = 'id,patient_id,title,detail,time_local,timezone,active';
 const recordFields = 'medication_id,patient_id,day,taken,taken_at';
 // Client JWT and database RLS remain the authority. There is no admin client,
-// role mutation, automatic local import, hard delete or unauthenticated fallback.
+// role mutation, automatic local import or unauthenticated fallback.
 export function createMedicationRepository(client: SupabaseClient) {
   async function actor(expected: string) {
     validateId(expected);
@@ -71,6 +71,15 @@ export function createMedicationRepository(client: SupabaseClient) {
       validateId(id); if (typeof active !== 'boolean') invalid(); await actor(patient);
       const { data, error } = await client.from('medications').update({ active }).eq('id', id).eq('patient_id', patient).select(fields).single(); check(error);
       return schedule(data, patient);
+    },
+    async remove(patient: string, id: string): Promise<void> {
+      validateId(id); await actor(patient);
+      // The existing FK rejects deletion when any historical records exist.
+      // Never delete records first or weaken that database protection.
+      const { data, error } = await client.from('medications').delete().eq('id', id).eq('patient_id', patient).select('id').single();
+      if (error?.code === '23503') throw new MedicationError('INPUT', '복약 기록이 있는 일정은 삭제할 수 없습니다. 일정 보관을 이용해 주세요.');
+      check(error);
+      if (data?.id !== id) throw new MedicationError('RESPONSE', '일정 삭제 결과를 확인하지 못했습니다. 다시 불러와 확인해 주세요.');
     },
     async mark(patient: string, id: string, day: string, taken: boolean): Promise<CloudRecord> {
       validateId(id); validateDay(day); if (typeof taken !== 'boolean') invalid(); await actor(patient);

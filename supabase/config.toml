@@ -2,3 +2,7 @@
 # No deployment is performed by adding this file.
 [functions.search-places]
 verify_jwt = false
+
+# User JWT required, plus /auth/v1/user verification inside the handler.
+[functions.check-dur]
+verify_jwt = true

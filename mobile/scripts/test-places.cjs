@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '../..');
-function loader(overrides = {}) {
+function loader(overrides = {}, globals = {}) {
   const cache = new Map();
   function load(relative) {
     const file = path.resolve(root, relative); if (cache.has(file)) return cache.get(file);
@@ -14,7 +14,7 @@ function loader(overrides = {}) {
     const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     const context = { exports, URL, Request, Response, Headers, AbortController, TextEncoder, TextDecoder, Uint8Array, Date, setTimeout, clearTimeout,
       fetch: () => { throw Error('live fetch forbidden'); },
-      process: { env: {} },
+      process: { env: {} }, ...globals,
       require: name => {
         if (Object.hasOwn(overrides, name)) return overrides[name];
         if (name.startsWith('.')) { const resolved = path.resolve(path.dirname(file), name); return load(resolved.endsWith('.ts') ? resolved : `${resolved}.ts`); }
@@ -31,17 +31,25 @@ const doc = { id: '999901', place_name: '가상의료기관', category_name: '�
 const provider = (documents = [doc]) => ({ meta: { is_end: true }, documents });
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 const endpoint = 'https://fixture.supabase.co/functions/v1/search-places';
+test('institution phone links accept only valid provided numbers and never open automatically', async () => {
+  const phone = loader()('mobile/src/services/placePhone.ts'); let calls = 0;
+  assert.equal(phone.placePhoneUrl('02-1234-5678'), 'tel:0212345678');
+  for (const value of ['', '119', 'tel:119', 'javascript:alert(1)', '02-1234;ext=5', '0'.repeat(31)]) assert.equal(phone.placePhoneUrl(value), null);
+  assert.equal(await phone.requestPlaceDialer('', async () => { calls++; }), false); assert.equal(calls, 0);
+  assert.equal(await phone.requestPlaceDialer('02-1234-5678', async url => { assert.equal(url, 'tel:0212345678'); calls++; }), true); assert.equal(calls, 1);
+  assert.equal(await phone.requestPlaceDialer('02-1234-5678', async () => { throw Error('unsupported'); }), false);
+});
 function edgeFixture(settings = {}) {
-  const calls = [], env = { SEARCH_PUBLIC_ENABLED: 'true', KAKAO_REST_API_KEY: 'fixture-only', UPSTASH_REDIS_REST_URL: 'https://fixture.upstash.io', UPSTASH_REDIS_REST_TOKEN: 'fixture-only', SEARCH_ALLOWED_ORIGINS: 'https://web.invalid', ...settings.env };
+  const calls = [], diagnostics = [], env = { SEARCH_PUBLIC_ENABLED: 'true', KAKAO_REST_API_KEY: 'fixture-only', UPSTASH_REDIS_REST_URL: 'https://fixture.upstash.io', UPSTASH_REDIS_REST_TOKEN: 'fixture-only', SEARCH_ALLOWED_ORIGINS: 'https://web.invalid', ...settings.env };
   const { createHandler } = loader()('supabase/functions/search-places/handler.ts');
-  const handler = createHandler({ env: key => env[key], now: () => Date.UTC(2026, 10, 1), fetch: async (url, init) => {
+  const handler = createHandler({ env: key => env[key], diagnose: event => diagnostics.push(event), now: () => Date.UTC(2026, 10, 1), fetch: async (url, init) => {
     calls.push({ url: String(url), init });
-    if (String(url).includes('upstash.io')) { if (settings.redisThrow) throw Error('fixture secret must not escape'); return json(settings.redis ?? { result: 1 }); }
+    if (String(url).includes('upstash.io')) { if (settings.redisThrow) throw Error('fixture secret must not escape'); return settings.redisRaw ? new Response(settings.redisRaw, { status: settings.redisStatus ?? 200 }) : json(settings.redis ?? { result: 1 }, settings.redisStatus ?? 200); }
     if (settings.kakaoThrow) throw Error('fixture secret must not escape');
     return json(settings.provider ?? provider(), settings.kakaoStatus ?? 200);
   } });
   const request = (body = query, headers = {}, method = 'POST') => new Request(endpoint, { method, headers: { 'Content-Type': 'application/json', ...headers }, ...(method === 'POST' ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}) });
-  return { handler, request, calls };
+  return { handler, request, calls, diagnostics };
 }
 
 test('public mobile and Edge contracts stay byte-identical without cross-root Metro imports', () => {
@@ -99,6 +107,36 @@ test('shared quota exhaustion and unavailable/malformed limiter fail closed befo
     assert.equal(f.calls.length, 1); assert.equal((await response.text()).includes('fixture secret'), false);
   }
 });
+test('limiter failures produce fixed safe diagnostic categories and never invoke Kakao', async () => {
+  const cases = [
+    [{ redisThrow: true }, 'NETWORK', null],
+    [{ redisStatus: 401, redis: { error: 'WRONGPASS private-token' } }, 'AUTH', 401],
+    [{ redisStatus: 403, redis: { error: 'NOPERM private-key' } }, 'ACL', 403],
+    [{ redisStatus: 400, redis: { error: 'ERR wrong number of arguments for EVAL private-script' } }, 'EVAL_ARGUMENTS', 400],
+    [{ redisStatus: 400, redis: { error: 'WRONGTYPE private-key' } }, 'SCRIPT_OR_DATA', 400],
+    [{ redisStatus: 429 }, 'PROVIDER_LIMIT', 429],
+    [{ redisStatus: 500, redisRaw: 'private-upstream-html' }, 'HTTP_ERROR', 500],
+    [{ redisRaw: 'private-invalid-json' }, 'INVALID_RESPONSE', 200],
+    [{ redis: { result: '1' } }, 'INVALID_RESPONSE', 200],
+  ];
+  for (const [settings, code, status] of cases) {
+    const f = edgeFixture(settings); const response = await f.handler(f.request());
+    assert.equal(response.status, 503); assert.equal((await response.json()).code, 'LIMITER_UNAVAILABLE'); assert.equal(f.calls.length, 1);
+    assert.equal(f.diagnostics.length, 1); assert.equal(f.diagnostics[0].code, code); assert.equal(f.diagnostics[0].httpStatus, status);
+    assert.equal(Object.keys(f.diagnostics[0]).sort().join(','), 'code,event,httpStatus');
+    assert.equal(JSON.stringify(f.diagnostics).includes('private'), false);
+  }
+});
+test('REST EVAL uses flat Redis wire arguments and preserves fail-closed quota behavior', async () => {
+  const f = edgeFixture(); assert.equal((await f.handler(f.request())).status, 200);
+  const init = f.calls[0].init, command = JSON.parse(init.body);
+  assert.equal(init.method, 'POST'); assert.equal(init.redirect, 'error'); assert.equal(init.headers.Authorization, 'Bearer fixture-only');
+  assert.equal(command.length, 12); assert.equal(command[0], 'EVAL'); assert.equal(command[2], '3');
+  assert.equal(command.slice(3, 6).every(x => typeof x === 'string' && x.startsWith('drmas:places:')), true);
+  assert.deepEqual(command.slice(6), ['30', '500', '5000', '120', '172800', '3456000']);
+  assert.equal(f.diagnostics.length, 0);
+  const denied = edgeFixture({ redis: { result: 0 } }); assert.equal((await denied.handler(denied.request())).status, 429); assert.equal(denied.calls.length, 1);
+});
 test('provider key rejection, quota and network failures expose only fixed error codes', async () => {
   for (const [settings, code] of [[{ kakaoStatus: 401 }, 'KAKAO_KEY_REJECTED'], [{ kakaoStatus: 429 }, 'PROVIDER_LIMITED'], [{ kakaoThrow: true }, 'UPSTREAM_UNAVAILABLE'], [{ provider: { bad: true } }, 'UPSTREAM_UNAVAILABLE']]) {
     const f = edgeFixture(settings), response = await f.handler(f.request()); assert.equal((await response.json()).code, code);
@@ -124,6 +162,39 @@ test('foreground permission denied needs no position call; successful location u
   const location = loader({ 'expo-location': { requestForegroundPermissionsAsync: async () => ({ status: permission }), hasServicesEnabledAsync: async () => true, Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async opts => { positionCalls++; assert.equal(opts.accuracy, 3); return { coords: { latitude: 1, longitude: 2 } }; } } })('mobile/src/services/placeLocation.ts');
   await assert.rejects(location.currentPlaceLocation(), e => e.code === 'DENIED'); assert.equal(positionCalls, 0);
   permission = 'granted'; assert.equal((await location.currentPlaceLocation()).longitude, 2); assert.equal(positionCalls, 1);
+});
+
+test('web location requests are explicit, tolerate missing Permissions API, and distinguish denied/insecure/timeout', async () => {
+  let calls = 0, failure = null;
+  const window = { isSecureContext: true };
+  const navigator = { geolocation: { getCurrentPosition(ok, fail, options) {
+    calls++; assert.equal(options.timeout, 12000);
+    if (failure) fail(failure); else ok({ coords: { latitude: 1, longitude: 2 } });
+  } } };
+  const api = loader({}, { window, navigator })('mobile/src/services/placeLocation.web.ts');
+  assert.equal(calls, 0); assert.equal((await api.currentPlaceLocation()).longitude, 2);
+  failure = { code: 1 }; await assert.rejects(api.currentPlaceLocation(), e => e.code === 'DENIED');
+  failure = { code: 3 }; await assert.rejects(api.currentPlaceLocation(), e => e.code === 'UNAVAILABLE');
+  window.isSecureContext = false; const count = calls;
+  await assert.rejects(api.currentPlaceLocation(), e => e.code === 'INSECURE'); assert.equal(calls, count);
+});
+
+test('unconfigured or invalid public search endpoints fail locally without any fetch', async () => {
+  const { createPlaceClient, validatePlaceEndpoint } = loader()('mobile/src/services/placesClient.ts');
+  assert.equal(validatePlaceEndpoint(endpoint), endpoint);
+  let calls = 0;
+  for (const value of [undefined, 'http://fixture.supabase.co/functions/v1/search-places', 'https://evil.invalid/functions/v1/search-places']) {
+    await assert.rejects(createPlaceClient(value, async () => { calls++; })(query), e => e.code === 'CONFIG');
+  }
+  assert.equal(calls, 0);
+});
+
+test('configured search endpoint cannot cross projects and missing deployments have a safe status', async () => {
+  const { createPlaceClient, validatePlaceEndpoint } = loader()('mobile/src/services/placesClient.ts');
+  assert.equal(validatePlaceEndpoint(endpoint, 'https://fixture.supabase.co'), endpoint);
+  assert.throws(() => validatePlaceEndpoint(endpoint, 'https://other.supabase.co'), e => e.code === 'CONFIG');
+  assert.throws(() => validatePlaceEndpoint(endpoint, 'http://fixture.supabase.co'), e => e.code === 'CONFIG');
+  await assert.rejects(createPlaceClient(endpoint, async () => new Response('private gateway body', { status: 404 }))(query), e => e.code === 'FUNCTION_NOT_DEPLOYED' && !e.message.includes('private'));
 });
 
 function mountSearch({ location, search }) {

@@ -28,12 +28,16 @@ export function useCloudMedications(user: AuthUser) {
     if (user.role === 'patient') void load();
     return () => { active = false; invalidate(); };
   }, [user.id, user.role, day, reload, invalidate]);
-  async function mutate(action: 'create' | 'update' | 'archive' | 'mark', id: string, value: ScheduleInput | boolean): Promise<boolean> {
+  async function mutate(action: 'create' | 'update' | 'archive' | 'mark' | 'remove', id: string, value: ScheduleInput | boolean): Promise<boolean> {
     if (lock.current || !ready || user.role !== 'patient' || data?.owner !== user.id) return false;
     lock.current = true; setBusy(true); setError(null); const epoch = generation.current;
     try {
       const repository = createMedicationRepository(getSupabaseClient());
-      if (action === 'mark') {
+      if (action === 'remove') {
+        await repository.remove(user.id, id);
+        if (epoch !== generation.current) return false;
+        setData(old => old?.owner === user.id ? { ...old, schedules: old.schedules.filter(row => row.id !== id) } : old);
+      } else if (action === 'mark') {
         const row = await repository.mark(user.id, id, day, value as boolean);
         if (epoch !== generation.current) return false;
         setData(old => old?.owner === user.id ? { ...old, records: [...old.records.filter(r => r.medication_id !== row.medication_id), row] } : old);

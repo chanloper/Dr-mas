@@ -78,7 +78,9 @@ test('app config preserves existing settings and exports only the two public fie
   vm.runInNewContext(compiled, context);
   const base = { name: 'mobile', slug: 'mobile', scheme: 'mobile', plugins: ['expo-router'], extra: { existing: true } };
   const config = context.exports.default({ config: base });
-  assert.equal(config.plugins, base.plugins); assert.equal(config.scheme, base.scheme); assert.equal(config.extra.existing, true);
+  assert.equal(base.plugins.length, 1); assert.equal(config.plugins[0], base.plugins[0]);
+  assert.ok(config.plugins.some(p => Array.isArray(p) && p[0] === 'expo-notifications'));
+  assert.equal(config.scheme, base.scheme); assert.equal(config.extra.existing, true);
   assert.deepEqual(Object.keys(config.extra.supabase).sort(), ['publishableKey', 'url']);
   assert.equal(JSON.stringify(config).includes('must-not-be-exported'), false);
 });

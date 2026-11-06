@@ -2,6 +2,7 @@ import { validateQuery, validateResult, type PlaceQuery, type PlaceResult } from
 export type { Category, Coordinates, Place, PlaceQuery, PlaceResult } from '../../../supabase/functions/_shared/placeContract';
 const messages: Record<string, string> = {
   CONFIG: '의료기관 검색 서버가 설정되지 않았습니다.', INVALID_INPUT: '지역명이나 기관명을 2~80자로 입력해 주세요.',
+  FUNCTION_NOT_DEPLOYED: '의료기관 검색 서버를 찾을 수 없습니다. 서비스 연결 준비가 필요합니다.',
   PUBLIC_DISABLED: '의료기관 검색 서비스가 아직 활성화되지 않았습니다.',
   KAKAO_NOT_CONFIGURED: '검색 서버의 카카오 API 키가 설정되지 않았습니다.', KAKAO_KEY_REJECTED: '검색 서버의 API 키 설정을 확인해야 합니다.',
   NOT_CONFIGURED: '검색 서버의 공개 호출 보호 설정이 준비되지 않았습니다.', LIMITER_UNAVAILABLE: '검색 요청 보호 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
@@ -14,20 +15,28 @@ const messages: Record<string, string> = {
 export class PlacesError extends Error {
   constructor(public code: string) { super(messages[code] ?? messages.UNAVAILABLE); }
 }
+export function validatePlaceEndpoint(endpoint: string | undefined, expectedProjectUrl?: string): string {
+  try {
+    const url = new URL(endpoint?.trim() ?? '');
+    if (url.protocol !== 'https:' || !url.hostname.endsWith('.supabase.co') || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/functions/v1/search-places') throw Error();
+    if (expectedProjectUrl) {
+      const project = new URL(expectedProjectUrl);
+      if (project.protocol !== 'https:' || project.port || project.username || project.password || project.search || project.hash || project.pathname !== '/' || project.hostname !== url.hostname) throw Error();
+    }
+    return url.toString();
+  } catch { throw new PlacesError('CONFIG'); }
+}
 export function createPlaceClient(endpoint: string | undefined, fetcher: typeof fetch = fetch) {
   return async (input: PlaceQuery, signal?: AbortSignal): Promise<PlaceResult> => {
     let query: PlaceQuery;
     try { query = validateQuery(input); } catch { throw new PlacesError('INVALID_INPUT'); }
-    let url: URL;
-    try {
-      url = new URL(endpoint?.trim() ?? '');
-      if (url.protocol !== 'https:' || !url.hostname.endsWith('.supabase.co') || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/functions/v1/search-places') throw Error();
-    } catch { throw new PlacesError('CONFIG'); }
+    const url = validatePlaceEndpoint(endpoint);
     const controller = new AbortController(), abort = () => controller.abort();
     if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, 15000);
     try {
-      const response = await fetcher(url.toString(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(query), signal: controller.signal });
+      const response = await fetcher(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(query), signal: controller.signal });
+      if (response.status === 404) throw new PlacesError('FUNCTION_NOT_DEPLOYED');
       const data: unknown = await response.json();
       if (!response.ok) {
         const code = data && typeof data === 'object' ? (data as { code?: unknown }).code : undefined;

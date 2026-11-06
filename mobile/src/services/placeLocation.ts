@@ -1,12 +1,7 @@
 import * as Location from 'expo-location';
 import type { Coordinates } from './placesClient';
-
-export class PlaceLocationError extends Error {
-  constructor(public code: 'DENIED' | 'UNAVAILABLE') {
-    super(code === 'DENIED' ? '위치 권한이 없어 주변 검색을 사용할 수 없습니다. 지역명이나 기관명으로 검색해 주세요.'
-      : '현재 위치를 확인하지 못했습니다. 위치 서비스를 확인하거나 키워드로 검색해 주세요.');
-  }
-}
+import { PlaceLocationError } from './placeLocationError';
+export { PlaceLocationError } from './placeLocationError';
 export async function currentPlaceLocation(): Promise<Coordinates> {
   try {
     const permission = await Location.requestForegroundPermissionsAsync();
@@ -18,7 +13,9 @@ export async function currentPlaceLocation(): Promise<Coordinates> {
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new PlaceLocationError('UNAVAILABLE')), 12000); }),
       ]);
-      return { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      const { latitude, longitude } = position.coords;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) throw new PlaceLocationError('UNAVAILABLE');
+      return { latitude, longitude };
     } finally { clearTimeout(timer); }
   } catch (e) { if (e instanceof PlaceLocationError) throw e; throw new PlaceLocationError('UNAVAILABLE'); }
 }

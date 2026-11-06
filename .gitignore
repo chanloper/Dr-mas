@@ -4,6 +4,20 @@
 !**/.env.sample
 !**/.env.template
 **/node_modules/
+
+# Supabase CLI local state and private database archives.
+/supabase/.temp/
+*.dump
+*.dump.sha256
+
+# Local Firebase Android client configuration; never commit this file.
+/mobile/google-services.json
+# Firebase server credentials must remain local, regardless of download name.
+**/*firebase-adminsdk*.json
+**/*service-account*.json
+**/*service_account*.json
+**/*private-key*.json
+/mobile/private-credentials/
 .local-auth-tests/
 .DS_Store
 .vercel

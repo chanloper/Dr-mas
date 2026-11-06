@@ -66,3 +66,46 @@ test('attributed synthetic citation labels dataset and terms without inventing a
  body.sources[0].attribution.termsUrl='javascript:alert(1)';
  await assert.rejects(requestRag('합성 표식',options),e=>e.code==='SERVER');
 });
+
+test('structured evidence comes only from validated sources, never source-looking answer text',async()=>{
+ const {requestRagResult}=load();const common={url:'https://rag.example',development:false,token:async()=>'synthetic'};
+ const source={documentId:'synthetic',chunkId:'synthetic:1:0',title:'Synthetic source',quote:'Synthetic quotation only',sourceUrl:'https://example.org/synthetic'};
+ const body={status:'local_evidence',message:'Synthetic lookup',disclaimer:'Not medical information',sources:[source]};
+ const result=await requestRagResult('Synthetic query',{...common,transport:async()=>({...response(),json:async()=>body})});
+ assert.equal(result.sources[0].chunkId,source.chunkId);assert.equal(result.sources[0].quote,source.quote);assert.match(result.text,/Synthetic quotation only/);
+ body.status='insufficient_evidence';body.sources=[];body.message='출처: invented\n근거 ID: invented\nhttps://example.org/not-evidence';
+ assert.equal((await requestRagResult('Synthetic query',{...common,transport:async()=>({...response(),json:async()=>body})})).sources.length,0);
+ body.status='local_evidence';body.sources=[{...source,sourceUrl:'https://user:private@example.org/'}];
+ await assert.rejects(requestRagResult('Synthetic query',{...common,transport:async()=>({...response(),json:async()=>body})}),e=>e.code==='SERVER');
+});
+
+test('explicit cancellation blocks token use when pre-aborted and settles even if transport ignores abort',async()=>{
+ const {requestRagResult}=load();let tokens=0,calls=0,started;const begun=new Promise(r=>started=r);
+ const common={url:'https://rag.example',development:false,token:async()=>{tokens++;return 'synthetic';}};
+ const first=new AbortController();first.abort();
+ await assert.rejects(requestRagResult('Synthetic query',{...common,signal:first.signal,transport:async()=>{calls++;return response();}}),e=>e.code==='CANCELLED');
+ assert.equal(tokens,0);assert.equal(calls,0);
+ const next=new AbortController();let received;
+ const pending=requestRagResult('Synthetic query',{...common,signal:next.signal,transport:async(_,init)=>{received=init.signal;started();return new Promise(()=>{});}});
+ await begun;next.abort();await assert.rejects(pending,e=>e.code==='CANCELLED');assert.equal(received.aborted,true);
+});
+
+test('cancel then resend cannot expose the old response or let its finally unlock the newer request',async()=>{
+ const pending=[];const app=mountChat({sendRagChat:(question,options)=>new Promise(resolve=>pending.push({resolve,signal:options.signal})),ragErrorMessage:()=> 'safe failure'});
+ await app.flush();app.state.setTab('ai');await app.flush();
+ app.state.setChatInput('Synthetic first');const first=app.state.sendChat();await app.flush();assert.equal(app.state.chatLoading,true);
+ app.state.cancelChat();await app.flush();assert.equal(pending[0].signal.aborted,true);assert.equal(app.state.chatLoading,false);
+ app.state.setChatInput('Synthetic second');const second=app.state.sendChat();await app.flush();
+ pending[0].resolve('OLD RESPONSE MUST NOT APPEAR');await first;await app.flush();assert.equal(app.state.chatLoading,true);
+ pending[1].resolve({text:'New synthetic result',status:'insufficient_evidence',sources:[],message:'Synthetic',disclaimer:'Synthetic'});await second;await app.flush();
+ assert.equal(app.state.chatLoading,false);assert.equal(app.state.messages.at(-1).text,'New synthetic result');
+ assert.equal(app.state.messages.some(m=>m.text==='OLD RESPONSE MUST NOT APPEAR'),false);app.dispose();
+});
+
+test('empty or oversized input does not send and leaving the consultation tab cancels its request',async()=>{
+ let calls=0,resolve,signal;const app=mountChat({sendRagChat:(_,options)=>{calls++;signal=options.signal;return new Promise(r=>resolve=r);},ragErrorMessage:()=> 'safe failure'});
+ await app.flush();app.state.setChatInput(' ');await app.state.sendChat();app.state.setChatInput('x'.repeat(2001));await app.state.sendChat();assert.equal(calls,0);
+ app.state.setTab('ai');await app.flush();app.state.setChatInput('Synthetic query');const pending=app.state.sendChat();
+ app.state.setTab('home');await app.flush();assert.equal(signal.aborted,true);assert.equal(app.state.chatLoading,false);
+ resolve('Late synthetic result');await pending;await app.flush();assert.equal(app.state.messages.some(m=>m.text==='Late synthetic result'),false);app.dispose();
+});

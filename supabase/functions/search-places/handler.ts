@@ -1,12 +1,49 @@
 import { categoryCode, normalizeKakao, validateQuery } from '../_shared/placeContract.ts';
+import { LIMIT_SCRIPT } from '../_shared/rateLimit.ts';
+export { LIMIT_SCRIPT } from '../_shared/rateLimit.ts';
 
-type Dependencies = { env: (key: string) => string | undefined; fetch: typeof fetch; now?: () => number };
+type LimiterCode = 'NETWORK' | 'TIMEOUT' | 'AUTH' | 'ACL' | 'EVAL_ARGUMENTS' | 'SCRIPT_OR_DATA' | 'PROVIDER_LIMIT' | 'HTTP_ERROR' | 'INVALID_RESPONSE' | 'COMMAND_ERROR';
+type LimiterDiagnostic = { event: 'SEARCH_LIMITER_FAILURE'; code: LimiterCode; httpStatus: number | null };
+type Dependencies = { env: (key: string) => string | undefined; fetch: typeof fetch; now?: () => number; diagnose?: (event: LimiterDiagnostic) => void };
 // Atomic shared counters, not isolate-local limits. No IP/location/query stored.
-export const LIMIT_SCRIPT = `
-for i=1,3 do if tonumber(redis.call('GET',KEYS[i]) or '0') >= tonumber(ARGV[i]) then return 0 end end
-for i=1,3 do local n=redis.call('INCR',KEYS[i]); if n==1 then redis.call('EXPIRE',KEYS[i],ARGV[i+3]) end end
-return 1`;
 class Failure extends Error { constructor(public code: string, public status: number) { super(code); } }
+class LimiterFailure extends Error {
+  constructor(public code: LimiterCode, public httpStatus: number | null) { super(code); }
+}
+function limiterError(status: number, data: unknown): LimiterCode {
+  const error = data && typeof data === 'object' && 'error' in data ? (data as { error: unknown }).error : null;
+  // Inspect only in memory. Never emit provider text, keys, URLs or request bodies.
+  const text = typeof error === 'string' ? error : '';
+  if (status === 401 || /WRONGPASS|NOAUTH|invalid.*token|unauthorized/i.test(text)) return 'AUTH';
+  if (/NOPERM|permission|ACL/i.test(text)) return 'ACL';
+  if (/wrong number|numkeys|number of keys|argument/i.test(text)) return 'EVAL_ARGUMENTS';
+  if (/WRONGTYPE|script|Lua|not.*integer/i.test(text)) return 'SCRIPT_OR_DATA';
+  if (status === 429) return 'PROVIDER_LIMIT';
+  if (status === 403) return 'ACL';
+  return status >= 200 && status < 300 ? 'COMMAND_ERROR' : 'HTTP_ERROR';
+}
+async function fetchLimiter(fetcher: typeof fetch, url: string, init: RequestInit): Promise<0 | 1> {
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 3000);
+  let status: number | null = null;
+  try {
+    const response = await fetcher(url, { ...init, signal: controller.signal, redirect: 'error' }); status = response.status;
+    let data: unknown;
+    try { data = await bodyJson(response, 4096); }
+    catch {
+      if (controller.signal.aborted) throw new LimiterFailure('TIMEOUT', status);
+      throw new LimiterFailure(response.ok ? 'INVALID_RESPONSE' : limiterError(status, null), status);
+    }
+    if (!response.ok) throw new LimiterFailure(limiterError(status, data), status);
+    if (!data || typeof data !== 'object') throw new LimiterFailure('INVALID_RESPONSE', status);
+    const result = data as { result?: unknown; error?: unknown };
+    if (result.error !== undefined) throw new LimiterFailure(limiterError(status, data), status);
+    if (result.result !== 0 && result.result !== 1) throw new LimiterFailure('INVALID_RESPONSE', status);
+    return result.result;
+  } catch (error) {
+    if (error instanceof LimiterFailure) throw error;
+    throw new LimiterFailure(controller.signal.aborted ? 'TIMEOUT' : 'NETWORK', status);
+  } finally { clearTimeout(timer); }
+}
 async function fetchBounded(fetcher: typeof fetch, url: string, init: RequestInit, ms: number) {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), ms);
   try {
@@ -72,13 +109,14 @@ export function createHandler(deps: Dependencies) {
       const now = deps.now?.() ?? Date.now(), iso = new Date(now).toISOString();
       let admission;
       try {
-        const response = await fetchBounded(deps.fetch, redis.origin, { method: 'POST', headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(['EVAL', LIMIT_SCRIPT, '3', `drmas:places:minute:${Math.floor(now / 60000)}`, `drmas:places:day:${iso.slice(0, 10)}`, `drmas:places:month:${iso.slice(0, 7)}`, ...caps.map(String), '120', '172800', '3456000']) }, 3000);
-        if (!response.ok) throw Error();
-        admission = response.data as { result?: unknown; error?: unknown };
-        if (!admission || admission.error || admission.result !== 0 && admission.result !== 1) throw Error();
-      } catch { throw new Failure('LIMITER_UNAVAILABLE', 503); }
-      if (admission.result !== 1) { headers['Retry-After'] = '60'; throw new Failure('RATE_LIMITED', 429); }
+        admission = await fetchLimiter(deps.fetch, redis.origin, { method: 'POST', headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(['EVAL', LIMIT_SCRIPT, '3', `drmas:places:minute:${Math.floor(now / 60000)}`, `drmas:places:day:${iso.slice(0, 10)}`, `drmas:places:month:${iso.slice(0, 7)}`, ...caps.map(String), '120', '172800', '3456000']) });
+      } catch (error) {
+        const failure = error instanceof LimiterFailure ? error : new LimiterFailure('INVALID_RESPONSE', null);
+        try { deps.diagnose?.({ event: 'SEARCH_LIMITER_FAILURE', code: failure.code, httpStatus: failure.httpStatus }); } catch { /* Logging cannot admit a request. */ }
+        throw new Failure('LIMITER_UNAVAILABLE', 503);
+      }
+      if (admission !== 1) { headers['Retry-After'] = '60'; throw new Failure('RATE_LIMITED', 429); }
       const url = new URL(`https://dapi.kakao.com/v2/local/search/${query.mode === 'nearby' ? 'category' : 'keyword'}.json`);
       url.searchParams.set('category_group_code', categoryCode(query.category));
       url.searchParams.set('size', '15'); url.searchParams.set('page', String(query.page));

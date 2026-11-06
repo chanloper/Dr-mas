@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "mobile",
-    "slug": "mobile",
+    "slug": "dr-mas-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -34,11 +34,29 @@
         }
       ],
       "expo-secure-store",
-      ["expo-location", { "locationWhenInUsePermission": "주변 병원과 약국을 찾기 위해 현재 위치를 사용합니다." }]
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "주변 병원과 약국을 찾기 위해 현재 위치를 사용합니다."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "environment": {},
+      "supabase": {},
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "94d68c0e-f0cd-48f8-9d7e-1e89b8b8c347"
+      }
+    },
+    "owner": "kang21-71607871s-team"
   }
 }
