@@ -3,6 +3,7 @@ import { mkdir, writeFile, rename, open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { emptyState, hash, splitDocument, validateDocument, type State } from './model.js';
 import {bindRights} from './rights.js';
+import { applyKdcaLifecycle } from './kdca-lifecycle.js';
 export interface Repository { read(): Promise<State>; transaction<T>(fn:(state:State)=>Promise<T>|T):Promise<T> }
 /** One atomic snapshot per transaction. Lock rejects concurrent writers across processes. */
 export class LocalRepository implements Repository {
@@ -13,6 +14,7 @@ export class LocalRepository implements Repository {
       if (state.schema !== 1) throw new Error('UNSUPPORTED_SCHEMA');
       for(const d of Object.values(state.documents))validateDocument(d);
       for(const c of Object.values(state.chunks))assertTextIntegrity(c.text);
+      applyKdcaLifecycle(state);
       return state;
     } catch(e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return emptyState(); throw e; }
   }
@@ -48,5 +50,7 @@ export async function register(repo:Repository,input:unknown) {
   });
 }
 export async function removeDocument(repo:Repository,id:string) {
-  return repo.transaction(s=>{ const found=!!s.documents[id]; delete s.documents[id]; for(const [key,c] of Object.entries(s.chunks)) if(c.documentId===id){delete s.chunks[key];delete s.vectors[key];} return {deleted:found}; });
+  return repo.transaction(s=>{ const found=!!s.documents[id];
+    if(/^kdca-\d{1,10}$/.test(id)) { s.kdcaLifecycle??={}; s.kdcaLifecycle[id]={...s.kdcaLifecycle[id],status:'revoked',reviewer:'removeDocument',changedAt:new Date().toISOString()}; }
+    delete s.documents[id]; for(const [key,c] of Object.entries(s.chunks)) if(c.documentId===id){delete s.chunks[key];delete s.vectors[key];} return {deleted:found}; });
 }

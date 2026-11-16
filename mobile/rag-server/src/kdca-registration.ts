@@ -92,6 +92,6 @@ export async function registerReviewedKdca(staging:string,target:string,review:K
   }
   const result=await executeRegistration(source,new LocalRepository(await canonical(target)),plan,{confirmed:true,
     reviewer:review.reviewer,reviewedAt:review.reviewedAt,testOnly:review.material==='synthetic',
-    ...(review.material==='official'?{kdcaUse:review.publication}:{})});
+    ...(review.material==='official'?{kdcaUse:review.publication,kdcaRawHash:review.rawHash}:{})});
   return {...result,material:review.material,testOnly:review.material==='synthetic'};
 }

@@ -4,16 +4,19 @@ import { emptyState, hash, validateDocument, type State } from './model.js';
 import { hasPermission, hasChunkPermission } from './rights.js';
 import { isKdcaDocument, kdcaUseAllowed } from './kdca-use.js';
 import type { LocalRepository } from './repository.js';
+import { applyKdcaLifecycle, validateKdcaLifecycle } from './kdca-lifecycle.js';
+import { applySupabaseKdcaControls } from './kdca-control-store.js';
 
 const maxBytes = 1_000_000;
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
 // A Secret File is a delivery mechanism, never evidence of permission.
 // Verify the entire snapshot before opening a destination transaction.
-export async function restoreCorpus(repo: LocalRepository, env: Record<string, string | undefined>) {
+export async function restoreCorpus(repo: LocalRepository, env: Record<string, string | undefined>, controlTransport: typeof fetch = fetch) {
   const file = env.RAG_STATE_SECRET_FILE;
   if (!file && !env.RAG_STATE_SHA256) return { status: 'RAG_RESTORE_NOT_CONFIGURED', documents: 0 };
   if (!file || !/^[a-f0-9]{64}$/.test(env.RAG_STATE_SHA256 ?? '')) throw Error('RAG_RESTORE_CONFIG_INVALID');
+  const durable = env.RAG_KDCA_CONTROL_BACKEND === 'supabase';
   let restored: State;
   try {
     const handle = await open(file, 'r');
@@ -50,6 +53,9 @@ export async function restoreCorpus(repo: LocalRepository, env: Record<string, s
         || !Array.isArray(vector.values) || !vector.values.length || !vector.values.every(Number.isFinite)) throw Error();
     }
     restored = emptyState();
+    validateKdcaLifecycle(state.kdcaLifecycle);
+    if (durable) await applySupabaseKdcaControls(state, env, controlTransport);
+    if (state.kdcaLifecycle) restored.kdcaLifecycle = structuredClone(state.kdcaLifecycle);
     for (const [id, doc] of Object.entries(state.documents)) {
       if (doc.rights.permission !== 'permitted' || !hasPermission(doc, 'local_search') || !hasPermission(doc, 'quotation')
         || isKdcaDocument(doc) && !kdcaUseAllowed(doc)) continue;
@@ -63,6 +69,23 @@ export async function restoreCorpus(repo: LocalRepository, env: Record<string, s
   } catch { throw Error('RAG_RESTORE_INVALID'); }
   try {
     await repo.transaction(state => {
+      if (!durable) {
+      // A local stop/deletion outranks an older active snapshot, even without its document.
+      restored.kdcaLifecycle ??= {};
+      for (const [id, control] of Object.entries(state.kdcaLifecycle ?? {})) {
+        if (control.status !== 'active' || !restored.kdcaLifecycle[id] || restored.kdcaLifecycle[id]!.status === 'active')
+          restored.kdcaLifecycle[id] = structuredClone(control);
+      }
+      for (const doc of Object.values(restored.documents)) {
+        if (isKdcaDocument(doc) && !state.kdcaLifecycle?.[doc.id]) {
+          // Lost/ephemeral disk must not revive an old active snapshot. Initial
+          // activation requires the existing reviewed registration on durable storage.
+          restored.kdcaLifecycle[doc.id] = { ...restored.kdcaLifecycle[doc.id],
+            status: 'refresh_failed', reviewer: 'restoreCorpus: local control record missing', changedAt: new Date().toISOString() };
+        }
+      }
+      applyKdcaLifecycle(restored);
+      }
       for (const key of Object.keys(state)) delete (state as unknown as Record<string, unknown>)[key];
       Object.assign(state, restored);
     });

@@ -13,12 +13,21 @@ function scalar(node: Node): string {
   if(node.children.length) throw new KdcaError('INVALID_RESPONSE');
   return node.text;
 }
+function kdcaEnvelope(xml: string): Node {
+  let root: Node;
+  try { root = parseHiraXml('<kdcaEnvelope>' + xml.replace(/^\uFEFF?\s*<\?xml[^?]*\?>/u, '') + '</kdcaEnvelope>'); }
+  catch { throw new KdcaError('INVALID_XML'); }
+  // Preserve the received bytes; support only the observed sole XML wrapper.
+  if (root.children.length === 1 && root.children[0]!.name === 'XML') {
+    if (root.text.trim()) throw new KdcaError('INVALID_RESPONSE');
+    root = root.children[0]!;
+  }
+  return root;
+}
 export function parseKdcaXml(xml: string, expected: KdcaContent, options: { offlineReview?: boolean } = {}): KdcaPayload {
   const limit = options.offlineReview === true ? kdcaOfflineReviewMaxBytes : kdcaLimits.maxResponseBytes;
   if(Buffer.byteLength(xml,'utf8')>limit) throw new KdcaError('TOO_LARGE');
-  let root: Node;
-  // Guide shows HEAD and svc as siblings. Wrap internally without changing rawXml/CDATA.
-  try { root = parseHiraXml('<kdcaEnvelope>'+xml.replace(/^\uFEFF?\s*<\?xml[^?]*\?>/u,'')+'</kdcaEnvelope>'); } catch { throw new KdcaError('INVALID_XML'); }
+  const root = kdcaEnvelope(xml);
   const nodes = flatten(root);
   // Accept the guide's HEAD/svc envelope only, not older invented response shapes.
   let metadata: Node[], statusNodes: Node[], sectionNodes: Node[];

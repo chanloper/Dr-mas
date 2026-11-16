@@ -16,6 +16,7 @@ export interface DocumentInput {
 export interface MedicalDocument extends DocumentInput { contentHash: string; version: number }
 export interface Chunk { id: string; documentId: string; version: number; contentHash: string; text: string; start: number; end: number }
 export interface Vector { profile: string; values: number[] }
+export interface State { kdcaLifecycle?: Record<string, import('./kdca-lifecycle.js').KdcaLifecycleRecord> }
 export interface State { schema: 1; acquisition?: import('./ingestion/batch.js').BatchControl; ingestion?: import('./ingestion/pipeline.js').IngestionState; embeddingCache?: Record<string,number[]>; documents: Record<string,MedicalDocument>; chunks: Record<string,Chunk>; vectors: Record<string,Vector>; usage: { calls: number; characters: number }; }
 export const emptyState = (): State => ({schema:1,documents:{},chunks:{},vectors:{},usage:{calls:0,characters:0}});
 export const hash = (s: string) => createHash('sha256').update(s).digest('hex');

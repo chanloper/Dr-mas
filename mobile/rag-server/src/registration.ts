@@ -40,7 +40,7 @@ export async function previewRegistration(source:Repository,target:Repository,bi
   attribution:{publisher:d.publisher,...attribution,updatedAt:d.updatedAt},sourcePermissionUnchanged:d.rights.permission};
 }
 export type RegistrationPlan=Awaited<ReturnType<typeof previewRegistration>>;
-export async function executeRegistration(source:Repository,target:Repository,plan:RegistrationPlan,approval:{confirmed:boolean;reviewer:string;reviewedAt:string;testOnly?:boolean;kdcaUse?:import('./kdca-use.js').KdcaUseReview}){
+export async function executeRegistration(source:Repository,target:Repository,plan:RegistrationPlan,approval:{confirmed:boolean;reviewer:string;reviewedAt:string;testOnly?:boolean;kdcaUse?:import('./kdca-use.js').KdcaUseReview;kdcaRawHash?:string}){
  if(approval.confirmed!==true||!approval.reviewer?.trim()||approval.reviewer.length>100||['APPROVED_REVIEWER_ROLE','required-at-execution','DRY_RUN_NOT_APPROVED'].includes(approval.reviewer)||!Number.isFinite(Date.parse(approval.reviewedAt)))throw Error('REGISTRATION_FINAL_APPROVAL_REQUIRED');
  await separateStores(source,target);
  const sourceState=await source.read();const d=checkedSource(sourceState,plan.target);
@@ -65,6 +65,12 @@ export async function executeRegistration(source:Repository,target:Repository,pl
   for(const [id,old]of Object.entries(before.documents))if(JSON.stringify(draft.documents[id])!==JSON.stringify(old))throw Error('REGISTRATION_OTHER_DOCUMENT_CHANGED');
   for(const [id,old]of Object.entries(before.chunks))if(JSON.stringify(draft.chunks[id])!==JSON.stringify(old))throw Error('REGISTRATION_OTHER_CHUNK_CHANGED');
   if(JSON.stringify(before.usage)!==JSON.stringify(draft.usage)||JSON.stringify(before.vectors)!==JSON.stringify(draft.vectors))throw Error('REGISTRATION_EXTERNAL_STATE_CHANGED');
+  if(approval.kdcaUse&&approval.kdcaRawHash){
+   if(!/^[a-f0-9]{64}$/.test(approval.kdcaRawHash))throw Error('KDCA_RAW_HASH_REQUIRED');
+   draft.kdcaLifecycle??={};
+   draft.kdcaLifecycle[d.id]={status:'active',reviewer:approval.reviewer,changedAt:approval.reviewedAt,
+    rawHash:approval.kdcaRawHash,contentHash:created.contentHash,lastVerifiedAt:approval.kdcaUse.lastVerifiedAt};
+  }
   Object.assign(state,draft);
   return {status:'registered',documentId:d.id,version:created.version,documentIncrease:1,externalCalls:0};
  });
