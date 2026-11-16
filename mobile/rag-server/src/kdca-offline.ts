@@ -6,7 +6,7 @@ import { kdcaCatalog, kdcaLimits, kdcaOfflineReviewMaxBytes } from './kdca-catal
 import { parseKdcaXml, KdcaError } from './kdca-healthinfo.js';
 import { createKdcaStaging, runKdcaBatch } from './kdca-batch.js';
 
-export async function stageKdcaXml(file: string, parent: string, contentId: string, options: { synthetic?: boolean } = {}) {
+export async function stageKdcaXml(file: string, parent: string, contentId: string, options: { synthetic?: boolean; inspectXml?: (xml: string) => void } = {}) {
   const entry = kdcaCatalog.find(item => item.contentId === contentId);
   if (!entry) throw new KdcaError('NOT_APPROVED');
   const metadata = await stat(file);
@@ -14,6 +14,7 @@ export async function stageKdcaXml(file: string, parent: string, contentId: stri
   let xml: string;
   try { xml = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await readFile(file)); }
   catch { throw new KdcaError('INVALID_XML'); }
+  options.inspectXml?.(xml);
   // An exported page or URL containing credentials is not an importable document.
   if (/(?:[?&]|&amp;|%3[fF]|%26)\s*TOKEN(?:=|%3[dD])/i.test(xml)) throw new KdcaError('SECRET_IN_RESPONSE');
   const payload = parseKdcaXml(xml, entry, { offlineReview: true });

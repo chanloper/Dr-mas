@@ -37,7 +37,7 @@ export async function localChat(repo:Repository,question:string,options:{synthet
   const d=state.documents[c.documentId];
   const eligible=options.syntheticDocuments
    ?d?.rights.permission==='test-only'&&options.syntheticDocuments.get(d.id)===hash(d.content)&&d.content.slice(c.start,c.end)===c.text
-   :d?.rights.permission!=='test-only'&&hasPermission(d,'local_search');
+   :d?.rights.permission==='permitted'&&hasPermission(d,'local_search');
   if(!eligible){delete state.chunks[id];delete state.vectors[id];}
  }
  const filteredAt=performance.now();

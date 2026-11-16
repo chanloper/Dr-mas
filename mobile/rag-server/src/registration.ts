@@ -54,7 +54,7 @@ export async function executeRegistration(source:Repository,target:Repository,pl
   const isolated:Repository={read:async()=>structuredClone(draft),transaction:async fn=>fn(draft)};
   const document=structuredClone(d);
   if(approval.kdcaUse)document.rights.kdcaUse=structuredClone(approval.kdcaUse);
-  if(approval.testOnly===true)document.rights.permission='test-only';
+  document.rights.permission=approval.testOnly===true?'test-only':'permitted';
   document.rights.scopes={};
   for(const scope of ['local_search','quotation','external_embedding','external_generation'] as const)document.rights.scopes[scope]={decision:scope==='local_search'||scope==='quotation'?'permitted':'denied',scope,evidenceUrl:attribution.termsUrl,
    reviewedAt:approval.reviewedAt,reviewer:approval.reviewer,documentId:d.id,documentVersion:d.version,contentHash:d.contentHash,purpose:registrationPurpose};

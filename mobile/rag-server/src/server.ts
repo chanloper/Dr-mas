@@ -5,6 +5,7 @@ import { createRagServer,supabaseVerifier } from './http-api.js';
 import { kdcaHomeItems } from './kdca-use.js';
 import { groundedChat } from './grounded-chat.js';
 import { LocalRepository } from './repository.js';
+import { restoreCorpus } from './restore-corpus.js';
 import { createSyntheticChat } from './synthetic-chat.js';
 import { createHiraReferenceHandler } from './hira-handler.js';
 try {
@@ -15,6 +16,7 @@ try {
  const repo=new LocalRepository(resolve(fileURLToPath(new URL('../data/local',import.meta.url))));
  const corpusMode=process.env.RAG_CORPUS_MODE??'local';
  if(!['local','synthetic'].includes(corpusMode))throw new Error('INVALID_CORPUS_MODE');
+ if(corpusMode==='local')console.info(JSON.stringify(await restoreCorpus(repo,process.env)));
  // Health conversations never instantiate an external provider, even when an
  // existing shell supplies a key and model. Non-medical copy work is a separate,
  // explicitly approved development task; credentials are not consent.
@@ -31,4 +33,7 @@ try {
   console.error(`RAG_SERVER_START_FAILED ${code}`);process.exitCode=1;
  });
  server.listen(port,process.env.RAG_HOST??'127.0.0.1',()=>console.log('RAG_SERVER_READY_LOCAL_EVIDENCE_ONLY'));
-}catch{console.error('RAG_SERVER_CONFIG_INVALID');process.exitCode=1;}
+}catch(error){
+ const status=error instanceof Error&&/^RAG_RESTORE_(?:CONFIG_INVALID|INVALID|WRITE_FAILED)$/.test(error.message)?error.message:'RAG_SERVER_CONFIG_INVALID';
+ console.error(JSON.stringify({status,documents:0}));process.exitCode=1;
+}
