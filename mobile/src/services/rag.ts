@@ -1,6 +1,8 @@
 import { readToken } from './auth';
 import { requestRagResult, validateRagBaseUrl, type RagRequestOptions } from './ragClient';
 import { logRagDiagnostic, type RagClientStage } from './ragDiagnostics';
+import { withHeadacheMedicines } from './headacheMedicines';
+import { fetchHeadacheMedicines } from './prescriptionAnalysis';
 export { ragErrorMessage } from './ragClient';
 export function ragConfigured(): boolean {
   try { validateRagBaseUrl(process.env.EXPO_PUBLIC_RAG_API_URL, __DEV__); return true; } catch { return false; }
@@ -22,8 +24,9 @@ export async function sendRagChat(question: string, options: Pick<RagRequestOpti
         stage = next; logRagDiagnostic('stage', stage, Date.now() - started); options.onStage?.(next);
       },
     });
-    logRagDiagnostic('success', stage, Date.now() - started, reply);
-    return reply;
+    const result=await withHeadacheMedicines(reply,question,fetchHeadacheMedicines,options.signal);
+    logRagDiagnostic('success', stage, Date.now() - started, result);
+    return result;
   } catch (error) {
     logRagDiagnostic('error', stage, Date.now() - started, undefined, error);
     throw error;

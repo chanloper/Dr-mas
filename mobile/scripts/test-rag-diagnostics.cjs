@@ -16,6 +16,8 @@ test('RAG service preserves request/response and emits bounded stages and final 
  const logs=[],reply={status:'local_evidence',sources:[{}],text:'synthetic'};
  const api=load('rag',{__DEV__:true,process:{env:{EXPO_PUBLIC_RAG_API_URL:'http://127.0.0.1:8787'}},require:name=>{
   if(name==='./auth')return {readToken:async()=>'synthetic'};
+  if(name==='./headacheMedicines')return {withHeadacheMedicines:async reply=>reply};
+  if(name==='./prescriptionAnalysis')return {fetchHeadacheMedicines:async()=>{throw Error('must not query medicines for unrelated input');}};
   if(name==='./ragDiagnostics')return {logRagDiagnostic:(...args)=>logs.push(args)};
   if(name==='./ragClient')return {validateRagBaseUrl:()=>new URL('http://127.0.0.1:8787'),requestRagResult:async(question,options)=>{
    assert.equal(question,'synthetic');assert.equal(await options.token(),'synthetic');options.onStage('http');options.onStage('response');return reply;

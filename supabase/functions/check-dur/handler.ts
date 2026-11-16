@@ -1,5 +1,6 @@
-import { validateDurDrugs, validateDurSearch, type DurResult, type DurSearchInput, type DurCandidate } from '../_shared/durContract.ts';
+import { validateDurDrugs, validateDurSearch, type DurResult, type DurSearchInput, type DurCandidate, type DurDrug } from '../_shared/durContract.ts';
 import { LIMIT_SCRIPT } from '../_shared/rateLimit.ts';
+import { headacheOtc } from '../_shared/headacheOtc.ts';
 
 type Deps = { env: (key: string) => string | undefined; fetch: typeof fetch };
 class Failure extends Error { constructor(public code: string, public status = 503) { super(code); } }
@@ -110,10 +111,14 @@ export function createHandler(deps: Deps) {
       const entry = limits.get(user.id) ?? { count: 0, until: now + 60000 };
       if (limits.size >= 1000 && !limits.has(user.id) || ++entry.count > 5) throw new Failure('RATE_LIMITED', 429);
       limits.set(user.id, entry);
-      let drugs; let search: DurSearchInput | null = null;
+      let drugs: DurDrug[]; let search: DurSearchInput | null = null; let relatedOtc = false;
       try {
         const body = await bounded(jsonBody(request, 4096, controller.signal)) as Record<string, unknown>;
-        if (body?.mode === 'search') { search = validateDurSearch(body); drugs = [{ name: search.query }]; }
+        if(body?.mode==='related-otc') {
+          if(body.symptom!=='두통'||Object.keys(body).some(key=>!['mode','symptom'].includes(key)))throw Error();
+          relatedOtc=true;drugs=[];
+        }
+        else if (body?.mode === 'search') { search = validateDurSearch(body); drugs = [{ name: search.query }]; }
         else {
           if (!body || Object.keys(body).some(k => k !== 'drugs')) throw Error();
           drugs = validateDurDrugs(body.drugs);
@@ -126,6 +131,23 @@ export function createHandler(deps: Deps) {
         if (redis.protocol !== 'https:' || !redis.hostname.endsWith('.upstash.io') || redis.port || redis.username || redis.password || redis.pathname !== '/' || redis.search || redis.hash || !redisToken) throw Error();
       } catch { throw new Failure('NOT_CONFIGURED'); }
       const caps = [cap(deps.env('DUR_MAX_PER_MINUTE'), 30, 60), cap(deps.env('DUR_MAX_PER_DAY'), 500, 1000), cap(deps.env('DUR_MAX_PER_MONTH'), 5000, 10000)];
+      if(relatedOtc) {
+        let rawKey:string;try{rawKey=decodeURIComponent(secret);}catch{throw new Failure('NOT_CONFIGURED');}
+        const result=await headacheOtc(rawKey,async url=>{
+          const time=Date.now(),iso=new Date(time).toISOString();
+          let admission;
+          try {
+            admission=await fetchJson(redis.origin,{method:'POST',headers:{Authorization:`Bearer ${redisToken}`,'Content-Type':'application/json'},
+              body:JSON.stringify(['EVAL',LIMIT_SCRIPT,'3',`drmas:dur:minute:${Math.floor(time/60000)}`,`drmas:dur:day:${iso.slice(0,10)}`,`drmas:dur:month:${iso.slice(0,7)}`,...caps.map(String),'120','172800','3456000'])},4096) as {result?:unknown;error?:unknown};
+            if(!admission||admission.error||![0,1].includes(Number(admission.result)))throw Error();
+          }catch{throw new Failure('LIMITER_UNAVAILABLE');}
+          if(admission.result!==1)throw new Failure('RATE_LIMITED',429);
+          const value=await fetchJson(url,{});
+          if([secret,rawKey,encodeURIComponent(rawKey)].some(key=>JSON.stringify(value).includes(key)))throw new Failure('PROVIDER_RESPONSE_INVALID',502);
+          return value;
+        });
+        return reply(result);
+      }
       const result: DurResult = { status: 'reference_only', drugs: [], warnings: [], notices: [], checkedAt: new Date().toISOString() };
       const collected = drugs.map(() => ({ rows: [] as Row[], total: null as number | null, complete: false }));
       const validReason = (v: unknown): v is string => typeof v === 'string' && !!v.trim() && v.length <= 1500 && !/[\u0000-\u001f<>]/u.test(v);

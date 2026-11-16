@@ -146,7 +146,7 @@ export function ConsultationChat({ historyRequest = 0, onHistoryHandled }: { his
           onHospital={() => router.push({ pathname: '/places', params: { category: 'hospital' } })} />)}
         {position < messages.length && !interviews.some(interview => !interview.followup && interview.anchor === position
           && messages[position].sender === 'user' && consultationDisplayQuestion(messages[position].text) === interview.question)
-          && <ChatMessage message={messages[position].sender === 'user' ? { ...messages[position], text: consultationDisplayQuestion(messages[position].text) } : messages[position]} question={messages.slice(0, position).reverse().find(message => message.sender === 'user')?.text} onEvidence={() => setEvidence(messages[position])} />}
+          && <ChatMessage message={messages[position].sender === 'user' ? { ...messages[position], text: consultationDisplayQuestion(messages[position].text) } : messages[position]} question={messages.slice(0, position).reverse().find(message => message.sender === 'user')?.text} onEvidence={() => setEvidence(messages[position])} onPharmacy={() => setPlaceCategory('pharmacy')} onMedicineTools={() => setMedicineOpen(true)} />}
       </React.Fragment>)}</View>}
       {!configured && <StatusMessage>일반 자료 검색은 서버 연결이 필요해요. 응급 안내와 응급 후속 질문은 네트워크 없이도 이용할 수 있어요.</StatusMessage>}
       {developmentEndpoint && <Text selectable style={s.caption}>개발 연결 확인: {developmentEndpoint}</Text>}

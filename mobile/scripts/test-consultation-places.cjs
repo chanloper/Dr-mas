@@ -20,9 +20,10 @@ test('consultation navigation accepts only a single supported category and defau
 test('consultation links only carry category; navigation does not start location or search', () => {
   const screen = read('screens/AiScreen.tsx');
   assert.match(screen, /params: \{ category: 'hospital' \}/);
-  assert.match(screen, /params: \{ category: 'pharmacy' \}/);
+  assert.match(screen, /onPharmacy=\{\(\) => setPlaceCategory\('pharmacy'\)\}/);
+  assert.match(screen, /PlacesContent key=\{placeCategory\} initialCategory=\{placeCategory\}/);
   assert.doesNotMatch(screen, /currentPlaceLocation|searchPlaces\(|coordinates:|symptomText:/);
-  assert.match(screen, /emergency \? <>[\s\S]*?<EmergencyCallButton/);
+  assert.match(screen, /emergency && <View[\s\S]*?<EmergencyCallButton/);
   assert.match(read('app/places.tsx'), /PlacesContent key=\{category\} initialCategory=\{category\}/);
   const hook = read('features/places/usePlaceSearch.ts');
   assert.match(hook, /useState<Category>\(initialCategory\)/);

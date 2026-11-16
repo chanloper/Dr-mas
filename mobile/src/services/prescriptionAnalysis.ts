@@ -62,6 +62,10 @@ export async function searchPrescriptionDrugs(query: string, page: number, signa
   if (result.query !== input.query || result.page !== input.page) throw new DurError('UNAVAILABLE');
   return result;
 }
+// Fixed public symptom only. No free-text conversation, patient record or medicine schedule is sent.
+export async function fetchHeadacheMedicines(signal: AbortSignal): Promise<unknown> {
+  return invokeDur({ mode: 'related-otc', symptom: '두통' }, signal);
+}
 export async function checkPrescriptionDur(drugs: DurDrug[], signal: AbortSignal) {
   let input;
   try { input = validateDurDrugs(drugs); } catch { throw new DurError('INVALID_INPUT'); }

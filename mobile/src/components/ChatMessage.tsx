@@ -32,7 +32,7 @@ export function questionQuote(quote: string, question?: string): string {
   return quote.slice(start, end);
 }
 
-export function ChatMessage({ message, onEvidence, question }: { message: Chat; onEvidence: () => void; question?: string }) {
+export function ChatMessage({ message, onEvidence, question, onPharmacy, onMedicineTools }: { message: Chat; onEvidence: () => void; question?: string; onPharmacy?: () => void; onMedicineTools?: () => void }) {
   const mine = message.sender === 'user';
   const emergency = !mine && message.status === 'emergency' ? message.emergency ?? (question ? emergencyGuidance(question) : null) : null;
   const insufficient = !mine && message.outcome === 'response' && message.status === 'insufficient_evidence';
@@ -69,6 +69,11 @@ export function ChatMessage({ message, onEvidence, question }: { message: Chat; 
       <Text style={s.caption}>자료에 없는 관련 질환·대처법·방문 기준은 추측해 보충하지 않습니다.</Text>
       {publicHealthEvidence && <Text style={s.caption}>분류 제목을 붙인 공개자료 발췌이며, 개인의 원인 질환이나 가능성 순위를 판단한 내용은 아니에요. 개인별 대처법과 진료과는 이 자료만으로 정할 수 없어요. 증상이 지속되거나 심해지면 의료진과 상담하세요. 의료 전문가의 임상 검토는 아직 완료되지 않았어요. 자료별 이용 조건과 전체 원문은 아래에서 확인할 수 있어요.</Text>}
       <Action label="원문 전체와 출처 보기" outline small onPress={onEvidence} />
+      {message.sources!.some(source=>/^mfds-otc-\d{9}$/.test(source.documentId))&&<>
+        <Text style={s.caption}>개인별 복용 적합성은 확인하지 않았습니다. 약국·편의점 재고는 미확인이며, 현재 복약 정보와의 병용금기 확인이 필요합니다.</Text>
+        {onPharmacy&&<Action label="약국 찾기 · 재고 미확인" outline small onPress={onPharmacy} />}
+        {onMedicineTools&&<Action label="복용 중인 약과 DUR 확인" outline small onPress={onMedicineTools} />}
+      </>}
       <Text style={[s.caption, { marginTop: 10 }]}>참고용 정보예요. 진단·처방이나 의료진의 판단을 대신하지 않아요.</Text>
     </> : <Text selectable style={{ color: mine ? C.white : C.ink, fontSize: 17, lineHeight: 28 }}>{insufficient
       ? contextualLimit + '현재 등록된 공식 자료에서는 질문에 답할 근거를 확인하지 못했어요. 원인이나 치료법을 추측하지 않을게요. 증상을 더 적거나 의료진과 상담해 주세요.'
