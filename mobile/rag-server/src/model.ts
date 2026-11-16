@@ -11,7 +11,7 @@ export interface DocumentInput {
   publishedAt: string | null; updatedAt: string | null; collectedAt: string;
   category: typeof categories[number]; content: string;
   attribution?:SourceAttribution;
-  rights: { terms: string; permission: 'permitted' | 'test-only' | 'pending'; checkedAt: string;scopes?:ScopeDecisions };
+  rights: { terms: string; permission: 'permitted' | 'test-only' | 'pending'; checkedAt: string;scopes?:ScopeDecisions; kdcaUse?: import('./kdca-use.js').KdcaUseReview };
 }
 export interface MedicalDocument extends DocumentInput { contentHash: string; version: number }
 export interface Chunk { id: string; documentId: string; version: number; contentHash: string; text: string; start: number; end: number }

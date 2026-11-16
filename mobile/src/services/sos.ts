@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type SosActor = { id: string; role: 'patient' | 'guardian' };
-export type SosAlert = { id: string; request_id: string; patient_id: string; guardian_id: string; created_at: string; acknowledged_at: string | null };
+export type SosAlert = { id: string; request_id: string; patient_id: string; guardian_id: string; created_at: string; acknowledged_at: string | null; event_type?: 'manual' | 'simulated_fall' };
 type Code = 'AUTH' | 'ROLE' | 'UNAVAILABLE' | 'NO_GUARDIAN' | 'RATE_LIMIT' | 'NETWORK' | 'SERVER' | 'INPUT' | 'BUSY';
 export class SosError extends Error { constructor(public code: Code) { super(code); } }
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
@@ -21,7 +21,7 @@ export function sosErrorMessage(error: unknown): string {
     NETWORK: '연결을 확인하지 못했습니다. 전송·확인 결과가 불확실할 수 있으니 내역을 새로고침해 주세요.',
     SERVER: '서버에서 요청을 확인하지 못했습니다. 내역을 새로고침해 주세요.', INPUT: '요청 정보를 확인해 주세요.', BUSY: '이전 요청을 처리 중입니다.' })[code];
 }
-export function createSosRepository(client: SupabaseClient) {
+export function createSosRepository(client: SupabaseClient, testEnvironmentAllowed: () => boolean = () => false) {
   let writing = false;
   async function verify(actor: SosActor) {
     if (!uuid(actor.id) || !['patient', 'guardian'].includes(actor.role)) throw new SosError('INPUT');
@@ -39,28 +39,55 @@ export function createSosRepository(client: SupabaseClient) {
     async list(actor: SosActor): Promise<SosAlert[]> {
       try {
         await verify(actor);
-        const { data, error } = await client.from('sos_alerts')
-          .select('id,request_id,patient_id,guardian_id,created_at,acknowledged_at')
+        const query = (columns: string) => client.from('sos_alerts')
+          .select(columns)
           .eq(actor.role === 'patient' ? 'patient_id' : 'guardian_id', actor.id)
           .order('acknowledged_at', { ascending: true, nullsFirst: true })
           .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(50);
+        let { data, error } = await query('id,request_id,patient_id,guardian_id,created_at,acknowledged_at,event_type');
+        // Existing deployments without the optional Dev extension remain usable.
+        if (error && ['42703', 'PGRST204'].includes(error.code)) {
+          ({ data, error } = await query('id,request_id,patient_id,guardian_id,created_at,acknowledged_at'));
+        }
         if (error) throw failure(error);
-        if (!Array.isArray(data) || data.length > 50) throw new SosError('SERVER');
+        const records: unknown = data;
+        if (!Array.isArray(records) || records.length > 50) throw new SosError('SERVER');
         const seen = new Set<string>();
-        for (const r of data) {
+        for (const r of records) {
+          if (!r || typeof r !== 'object') throw new SosError('SERVER');
+          if (r.event_type !== undefined && !['manual', 'simulated_fall'].includes(r.event_type)) throw new SosError('SERVER');
           if (![r.id, r.request_id, r.patient_id, r.guardian_id].every(uuid) || seen.has(r.id)
             || r[actor.role === 'patient' ? 'patient_id' : 'guardian_id'] !== actor.id
             || r.patient_id === r.guardian_id || typeof r.created_at !== 'string' || !Number.isFinite(Date.parse(r.created_at))
             || r.acknowledged_at !== null && (typeof r.acknowledged_at !== 'string' || !Number.isFinite(Date.parse(r.acknowledged_at)) || Date.parse(r.acknowledged_at) < Date.parse(r.created_at))) throw new SosError('SERVER');
           seen.add(r.id);
         }
-        return data;
+        return records as SosAlert[];
       } catch (e) { throw e instanceof SosError ? e : new SosError('NETWORK'); }
     },
     send(actor: SosActor) {
       return write(actor, async () => {
         if (actor.role !== 'patient') throw new SosError('ROLE');
         const { data, error } = await client.rpc('request_sos_alert');
+        if (error) throw failure(error);
+        if (!Number.isInteger(data) || data < 1) throw new SosError('SERVER');
+        return data as number;
+      });
+    },
+    async testAvailable(actor: SosActor): Promise<boolean> {
+      if (!testEnvironmentAllowed() || actor.role !== 'patient') throw new SosError('ROLE');
+      await verify(actor);
+      try {
+        const { data, error } = await client.rpc('sos_test_available');
+        if (error) throw failure(error);
+        return data === true;
+      } catch (e) { throw e instanceof SosError ? e : new SosError('NETWORK'); }
+    },
+    sendSimulation(actor: SosActor, eventId: string) {
+      return write(actor, async () => {
+        if (!testEnvironmentAllowed() || actor.role !== 'patient') throw new SosError('ROLE');
+        if (!/^[a-zA-Z0-9_-]{1,128}$/.test(eventId)) throw new SosError('INPUT');
+        const { data, error } = await client.rpc('request_simulated_sos_alert', { event_id: eventId });
         if (error) throw failure(error);
         if (!Number.isInteger(data) || data < 1) throw new SosError('SERVER');
         return data as number;

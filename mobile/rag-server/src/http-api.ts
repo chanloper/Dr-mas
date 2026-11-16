@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { answer } from './answer.js';
+import { answer, routeSafety, safetyMessages } from './answer.js';
 import type { Repository } from './repository.js';
 import { hash } from './model.js';
 import {hasPermission} from './rights.js';
@@ -22,9 +22,17 @@ export function supabaseVerifier(url:string,key:string,transport:typeof fetch=fe
   return user.id;
  };
 }
-// Public, rights-reviewed corpus only; no patient data, Gemini or writes in HTTP mode.
-export async function localChat(repo:Repository,question:string,options:{syntheticDocuments?:ReadonlyMap<string,string>}={}) {
- const state=structuredClone(await repo.read());
+// Local search helper only; grounded-chat separately handles permitted Gemini use.
+export type LocalSearchTiming = { repositoryMs:number; permissionsMs:number; retrievalMs:number };
+export async function localChat(repo:Repository,question:string,options:{syntheticDocuments?:ReadonlyMap<string,string>;observeTiming?:(timing:LocalSearchTiming)=>void}={}) {
+ if(!question.trim()||question.length>2000)throw new Error('INVALID_QUERY');
+ // Safety must not depend on a disk read, retrieval, or corpus availability.
+ const safety=routeSafety(question);
+ if(safety)return {status:safety,message:safetyMessages[safety],disclaimer,mode:'local' as const,sources:[]};
+ const started=performance.now();
+ const stored=await repo.read();
+ const readAt=performance.now();
+ const state=structuredClone(stored);
  for(const [id,c] of Object.entries(state.chunks)){
   const d=state.documents[c.documentId];
   const eligible=options.syntheticDocuments
@@ -32,14 +40,17 @@ export async function localChat(repo:Repository,question:string,options:{synthet
    :d?.rights.permission!=='test-only'&&hasPermission(d,'local_search');
   if(!eligible){delete state.chunks[id];delete state.vectors[id];}
  }
+ const filteredAt=performance.now();
  const result=await answer({read:async()=>state,transaction:async()=>{throw new Error('READ_ONLY');}},question);
+ try{options.observeTiming?.({repositoryMs:readAt-started,permissionsMs:filteredAt-readAt,retrievalMs:performance.now()-filteredAt});}catch{/* diagnostics only */}
  const hits=('hits' in result?result.hits:[])??[];
  return {status:result.status,message:result.message,
   disclaimer:options.syntheticDocuments?'합성 테스트 자료입니다. 실제 의료정보나 복약 지침이 아닙니다. '+disclaimer:disclaimer,
   mode:options.syntheticDocuments?'synthetic' as const:'local' as const,
   sources:hits.map(h=>({documentId:h.documentId,chunkId:h.chunkId,title:h.title,sourceUrl:h.attribution?.datasetUrl??h.sourceUrl,quote:h.text,publisher:h.publisher,updatedAt:h.updatedAt,...(h.attribution?{attribution:h.attribution}:{})}))};
 }
-export function createRagServer(options:{verify:(token:string,signal:AbortSignal)=>Promise<string>;chat:(question:string)=>Promise<Awaited<ReturnType<typeof localChat>>>;origins?:string[];timeoutMs?:number;rateLimit?:number;now?:()=>number;observeOnce?:(result:{httpStatus:number;responseType:string})=>void}) {
+export type RequestTiming = { httpStatus:number; stage:'request'|'auth'|'body'|'search'; elapsedMs:number; authMs:number; bodyMs:number; searchMs:number };
+export function createRagServer(options:{verify:(token:string,signal:AbortSignal)=>Promise<string>;chat:(question:string,signal:AbortSignal)=>Promise<Awaited<ReturnType<typeof localChat>>>;reference?:(query:unknown,signal:AbortSignal)=>Promise<unknown>;healthInfo?:()=>Promise<unknown>;origins?:string[];timeoutMs?:number;rateLimit?:number;now?:()=>number;observeOnce?:(result:{httpStatus:number;responseType:string})=>void;observeTiming?:(result:RequestTiming)=>void}) {
  let observationAvailable=!!options.observeOnce;
  const buckets=new Map<string,{count:number;until:number}>();
  const now=options.now??Date.now;
@@ -50,12 +61,26 @@ export function createRagServer(options:{verify:(token:string,signal:AbortSignal
  };
  const server=createServer(async(req:IncomingMessage,res:ServerResponse)=>{
   const controller=new AbortController();let expired=false;
+  const started=performance.now();let stage:RequestTiming['stage']='request',stageStarted=started;
+  const durations={authMs:0,bodyMs:0,searchMs:0};
+  const enter=(next:RequestTiming['stage'])=>{
+   const elapsed=performance.now()-stageStarted;
+   if(stage==='auth')durations.authMs+=elapsed;
+   if(stage==='body')durations.bodyMs+=elapsed;
+   if(stage==='search')durations.searchMs+=elapsed;
+   stage=next;stageStarted=performance.now();
+  };
   const reply=(status:number,body:unknown)=>{if(!res.writableEnded&&!res.destroyed){
+   enter(stage);
+   // Fixed numeric/categorical telemetry only; never include headers, identity,
+   // questions, source text, tokens or upstream error messages.
+   const timing:RequestTiming={httpStatus:status,stage,elapsedMs:performance.now()-started,...durations};
+   res.once('finish',()=>{try{options.observeTiming?.(timing);}catch{/* diagnostics only */}});
    if(observationAvailable&&req.method==='POST'&&req.url==='/api/rag/chat'){
     observationAvailable=false;
     const data=body as {status?:unknown;error?:unknown}|null;
     const candidate=status===200?data?.status:data?.error;
-    const types=['local_evidence','insufficient_evidence','emergency','professional','privacy','UNAUTHORIZED','AUTH_UNAVAILABLE','ORIGIN_DENIED','JSON_REQUIRED','BODY_TOO_LARGE','RATE_LIMITED','INVALID_INPUT','TIMEOUT','SERVER_ERROR'];
+    const types=['grounded_answer','local_evidence','insufficient_evidence','emergency','professional','privacy','UNAUTHORIZED','AUTH_UNAVAILABLE','ORIGIN_DENIED','JSON_REQUIRED','BODY_TOO_LARGE','RATE_LIMITED','INVALID_INPUT','TIMEOUT','SERVER_ERROR'];
     const responseType=typeof candidate==='string'&&types.includes(candidate)?candidate:'OTHER';
     res.once('finish',()=>{try{options.observeOnce?.({httpStatus:status,responseType});}catch{/* Diagnostics must not affect responses. */}});
    }
@@ -65,7 +90,9 @@ export function createRagServer(options:{verify:(token:string,signal:AbortSignal
   try {
    const origin=req.headers.origin;
    if(origin){if(!options.origins?.includes(origin))throw new ApiError(403,'ORIGIN_DENIED');res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
-   if(req.url!=='/api/rag/chat')throw new ApiError(404,'NOT_FOUND');
+   const reference=req.url==='/api/hira/reference'&&!!options.reference;
+   const healthInfo=req.url==='/api/rag/health-info'&&!!options.healthInfo;
+   if(req.url!=='/api/rag/chat'&&!reference&&!healthInfo)throw new ApiError(404,'NOT_FOUND');
    if(req.method==='OPTIONS'){res.setHeader('Access-Control-Allow-Methods','POST');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');reply(204,null);return;}
    if(req.method!=='POST')throw new ApiError(405,'METHOD_NOT_ALLOWED');
    if(!allow('ip:'+req.socket.remoteAddress,60))throw new ApiError(429,'RATE_LIMITED');
@@ -73,18 +100,30 @@ export function createRagServer(options:{verify:(token:string,signal:AbortSignal
    if(Number(req.headers['content-length'])>8192)throw new ApiError(413,'BODY_TOO_LARGE');
    const auth=req.headers.authorization;
    if(!auth||!/^Bearer [A-Za-z0-9._-]{1,8192}$/.test(auth))throw new ApiError(401,'UNAUTHORIZED');
+   enter('auth');
    const id=await options.verify(auth.slice(7),controller.signal);
    if(expired)return;
    if(!id)throw new ApiError(401,'UNAUTHORIZED');
    if(!allow('user:'+id,options.rateLimit??10))throw new ApiError(429,'RATE_LIMITED');
+   enter('body');
    const chunks:Buffer[]=[];let size=0;
    for await(const chunk of req){const bytes=Buffer.from(chunk);size+=bytes.length;if(size>8192)throw new ApiError(413,'BODY_TOO_LARGE');chunks.push(bytes);}
    let input:unknown;try{input=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));}catch{throw new ApiError(400,'INVALID_INPUT');}
+   if(healthInfo){
+    if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length)throw new ApiError(400,'INVALID_INPUT');
+    if(expired)return;enter('search');
+    const result=await options.healthInfo!();if(!expired)reply(200,result);return;
+   }
+   if(reference){
+    if(expired)return;enter('search');
+    const result=await options.reference!(input,controller.signal);if(!expired)reply(200,result);return;
+   }
    if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>k!=='question'))throw new ApiError(400,'INVALID_INPUT');
    const question=(input as {question?:unknown}).question;
    if(typeof question!=='string'||!question.trim()||question.length>2000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/u.test(question))throw new ApiError(400,'INVALID_INPUT');
    if(expired)return;
-   const result=await options.chat(question.trim());if(!expired)reply(200,result);
+   enter('search');
+   const result=await options.chat(question.trim(),controller.signal);if(!expired)reply(200,result);
   }catch(error){if(!expired)reply(error instanceof ApiError?error.status:500,{error:error instanceof ApiError?error.code:'SERVER_ERROR'});}
   finally{clearTimeout(timer);}
  });

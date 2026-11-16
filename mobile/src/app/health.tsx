@@ -1,38 +1,24 @@
 import { useState } from 'react';
-import { Platform, Switch, Text, View } from 'react-native';
-import { FeaturePage } from '../components/FeaturePage';
-import { FeatureModal } from '../components/FeatureModal';
+import { Text } from 'react-native';
 import { FeatureTabs } from '../components/FeatureTabs';
+import { FeaturePage } from '../components/FeaturePage';
 import { FamilyPatientPicker } from '../components/FamilyPatientPicker';
-import { Action, Chip, Panel, StatusMessage, SummaryTile, TitleRow, s } from '../components/ui';
+import { HeartRatePanel } from '../components/HeartRatePanel';
+import { WearableSimulatorPanel } from '../components/WearableSimulatorPanel';
+import { Panel, StatusMessage, TitleRow, s } from '../components/ui';
 
 export default function HealthScreen() {
-  const [tab, setTab] = useState(0), [connect, setConnect] = useState(false), [period, setPeriod] = useState(0);
-  return <FeaturePage title="건강·웨어러블" subtitle="연결 상태, 측정 정보와 공유 범위를 한곳에서 확인하세요.">{user => <>
+  const [mode, setMode] = useState(0);
+  return <FeaturePage title="건강·웨어러블" subtitle="내 기기의 측정 정보와 접근 권한을 확인하세요.">{user => <>
     {user.role === 'guardian' && <FamilyPatientPicker key={user.id} guardianId={user.id} />}
-    <StatusMessage>웨어러블과 건강 정보 서비스는 미연결 상태입니다. 측정값이나 연결 성공 상태를 생성하지 않습니다.</StatusMessage>
-    <FeatureTabs labels={['연결 관리', '건강 정보', '공유·권한']} selected={tab} onSelect={setTab} />
-    {tab === 0 ? <Panel>
-      <TitleRow title={user.role === 'patient' ? '내 기기 연결' : '가족 기기 연결 상태'} accessory="연결 없음" />
-      <Text style={s.paragraph}>{Platform.OS === 'web' ? '웹에서는 Health Connect·HealthKit에 직접 연결할 수 없습니다. 모바일 앱 연동이 필요합니다.' : '모바일 건강 데이터 연결 기능이 아직 제공되지 않습니다.'}</Text>
-      {['Android · Health Connect', 'iOS · HealthKit', '스마트워치 동기화'].map(label => <View key={label} style={s.listItem}><Text style={s.bodyStrong}>{label}</Text><Chip text="미연결" kind="neutral" /></View>)}
-      <Text style={[s.caption, { marginVertical: 12 }]}>최근 동기화: 없음 · 연결된 기기: 없음</Text>
-      <Action label="연결 방법·필요 권한 보기" outline onPress={() => setConnect(true)} />
-      <View style={{ marginTop: 10 }}><Action label="동기화 · 미연결" disabled onPress={() => {}} /></View>
-    </Panel> : tab === 1 ? <Panel>
-      <TitleRow title="측정 정보" accessory="측정 기록 없음" />
-      <FeatureTabs labels={['오늘', '최근 7일']} selected={period} onSelect={setPeriod} />
-      <View style={s.tileGrid}><SummaryTile title="심박수" value="—" footer="측정 정보 없음" /><SummaryTile title="수면" value="—" footer="측정 정보 없음" /><SummaryTile title="걸음 수" value="—" footer="측정 정보 없음" /></View>
-      <View style={[s.statusEmpty, { minHeight: 150, borderRadius: 14, padding: 20, marginTop: 16, justifyContent: 'center' }]}><Text style={[s.paragraph, { textAlign: 'center' }]}>측정 기록이 연결되면 추이를 표시합니다.{ '\n' }현재 표시할 그래프 데이터가 없습니다.</Text></View>
-      <StatusMessage kind="empty">{period === 0 ? '오늘' : '최근 7일'} 동기화 이력이 없습니다. 건강 수치를 임의로 채우지 않습니다.</StatusMessage>
-    </Panel> : <Panel>
-      <TitleRow title="건강 정보 공유 범위" accessory="권한 미연결" />
-      {['심박수 읽기', '수면 정보 읽기', '걸음 수 읽기'].map(label => <View key={label} style={[s.listItem, s.rowBetween]}><Text style={s.bodyStrong}>{label}</Text><Switch value={false} disabled accessibilityLabel={`${label} 미연결`} /></View>)}
-      <StatusMessage>위 설정은 실제 기기 권한이 아닙니다. 환자의 동의와 플랫폼 권한 연동 후 사용할 수 있습니다. 보호자 연결 승인만으로 건강 정보 권한이 추가되지 않습니다.</StatusMessage>
-      <Action label="공유 설정 저장 · 미연결" disabled onPress={() => {}} />
+    <FeatureTabs labels={['가상 시뮬레이션', '실제 Health Connect']} selected={mode} onSelect={setMode} />
+    {mode === 0 ? <WearableSimulatorPanel key={`simulator-${user.id}`} actor={{ id: user.id, role: user.role }} /> : user.role === 'patient' ? <HeartRatePanel key={user.id} /> : <StatusMessage>이 기기의 건강정보는 환자 가족의 기록이 아닙니다. 보호자 자동 공유는 지원하지 않으며 환자 본인 계정에서만 조회합니다.</StatusMessage>}
+    {mode === 1 && <Panel>
+      <TitleRow title="연결 안내 및 개인정보" accessory="심박수 읽기만" />
+      <Text style={s.paragraph}>Galaxy Wearable 연결과 Samsung Health 동기화를 확인해 주세요. Android 14 이상은 시스템 Health Connect를, 이전 지원 기기는 Health Connect 앱 설치 상태를 확인하세요. Samsung Health와 워치 앱을 최신 버전으로 유지해 주세요.</Text>
+      <Text style={s.paragraph}>기록이 없으면 Samsung Health → 설정 → 삼성 계정과 동기화 → 지금 동기화 후 다시 확인하세요. 화면의 측정 시각을 Samsung Health 기록과 비교하세요.</Text>
+      <StatusMessage>Expo Go·웹·iOS에서는 지원하지 않습니다. Android Development Build를 설치해야 합니다. 걸음 수·수면은 추후 별도 동의를 받아 확장할 수 있으며 현재 권한을 요청하지 않습니다.</StatusMessage>
+      <Text style={s.caption}>조회값은 화면 메모리에만 유지하며 로그아웃·계정 전환·화면 종료 시 폐기합니다. Health Connect는 휴대전화 사용자의 기록이므로 다른 사람의 기기에서 조회하지 마세요.</Text>
     </Panel>}
-    <FeatureModal visible={connect} title="기기 연결 안내" onClose={() => setConnect(false)}>
-      <Text style={s.paragraph}>Android는 Health Connect, iOS는 HealthKit 연결과 항목별 사용자 동의가 필요합니다. 웹에서 이 권한을 대신 승인할 수 없습니다. 현재 화면에서는 권한 요청·기기 검색·연결을 실행하지 않습니다.</Text>
-    </FeatureModal>
   </>}</FeaturePage>;
 }

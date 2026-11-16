@@ -41,7 +41,7 @@ export default function FallScreen() {
     <Panel style={s.sectionGap}><TitleRow title="119 직접 전화" /><EmergencyCallButton /></Panel>
     <FeatureModal visible={preview} title="낙상 알림 대기 화면 미리보기" onClose={() => setPreview(false)}>
       <Chip text="실제 감지·전송 없음" kind="neutral" />
-      <Text style={[s.h1, { textAlign: 'center', color: C.danger, fontSize: 40, lineHeight: 52 }]}>{delay}초</Text>
+      <View style={{backgroundColor:C.dangerSoft,borderColor:C.danger,borderWidth:2,borderRadius:24,padding:24,marginVertical:16,gap:12}}><Text style={[s.bodyStrong,{color:C.danger,textAlign:'center'}]}>SOS 대기 화면 미리보기</Text><Text style={[s.h1, { textAlign: 'center', color: C.danger, fontSize: 40, lineHeight: 52 }]}>{delay}초</Text></View>
       <Text style={s.paragraph}>선택한 대기시간의 화면 구성입니다. 시간이 흐르거나 자동 SOS가 발송되지 않습니다.</Text>
       <Action label="대기 취소" outline onPress={() => { setPreview(false); setCancelled(true); }} />
       <Action label="음성으로 취소 · 미연결" outline disabled onPress={() => {}} />

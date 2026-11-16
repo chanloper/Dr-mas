@@ -6,6 +6,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '../..');
+
+test('browser network failures mention possible web origin configuration without claiming certainty or leaking data', async()=>{
+ const client=loader({}, {window:{}})('mobile/src/services/placesClient.ts');
+ await assert.rejects(client.createPlaceClient('https://dev-ref.supabase.co/functions/v1/search-places',async()=>{throw new TypeError('private fetch failure');})({category:'hospital',mode:'keyword',query:'합성 검색',page:1}),error=>error.code==='WEB_NETWORK'&&error.message.includes('접근 허용')&&!error.message.includes('private'));
+});
 function loader(overrides = {}, globals = {}) {
   const cache = new Map();
   function load(relative) {
@@ -94,6 +99,20 @@ test('nearby category request fixes category/radius/size and maps x=longitude, y
   const command = JSON.parse(f.calls[0].init.body); assert.equal(command[0], 'EVAL'); assert.equal(command[2], '3');
   assert.deepEqual(command.slice(6, 9), ['30', '500', '5000']);
   assert.equal((await response.text()).includes('fixture-only'), false);
+});
+test('Edge response maps Kakao x/y to latitude/longitude and omits invalid or missing coordinates', async () => {
+  const documents = [
+    { ...doc, x: '126.978', y: '37.5665' },
+    { ...doc, id: '999902', place_url: 'https://place.map.kakao.com/999902', x: '181', y: '37.5665' },
+    { ...doc, id: '999903', place_url: 'https://place.map.kakao.com/999903' },
+  ];
+  const f = edgeFixture({ provider: provider(documents) });
+  const response = await f.handler(f.request(query));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.places[0].coordinates, { latitude: 37.5665, longitude: 126.978 });
+  assert.equal(Object.hasOwn(body.places[1], 'coordinates'), false);
+  assert.equal(Object.hasOwn(body.places[2], 'coordinates'), false);
 });
 test('pharmacy keyword search filters PM9 without requiring coordinates or sending radius', async () => {
   const f = edgeFixture({ provider: provider([{ ...doc, category_group_code: 'PM9' }]) });
@@ -197,7 +216,7 @@ test('configured search endpoint cannot cross projects and missing deployments h
   await assert.rejects(createPlaceClient(endpoint, async () => new Response('private gateway body', { status: 404 }))(query), e => e.code === 'FUNCTION_NOT_DEPLOYED' && !e.message.includes('private'));
 });
 
-function mountSearch({ location, search }) {
+function mountSearch({ location, search, initialCategory }) {
   const slots = [], effects = []; let cursor = 0, dirty = true, current, disposed = false, late = 0;
   const hooks = {
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { if (disposed) { late++; return; } const next = typeof value === 'function' ? value(slots[i]) : value; if (!Object.is(next, slots[i])) { slots[i] = next; dirty = true; } }]; },
@@ -206,7 +225,7 @@ function mountSearch({ location, search }) {
   };
   class LocationError extends Error { constructor() { super('위치 권한 거부'); } }
   const hook = loader({ react: hooks, '../../services/places': { searchPlaces: search }, '../../services/placeLocation': { currentPlaceLocation: location, PlaceLocationError: LocationError } })('mobile/src/features/places/usePlaceSearch.ts');
-  function render() { let count = 0; while (dirty && !disposed) { assert.ok(count++ < 30); dirty = false; cursor = 0; current = hook.usePlaceSearch(); while (effects.length) effects.shift()(); } }
+  function render() { let count = 0; while (dirty && !disposed) { assert.ok(count++ < 30); dirty = false; cursor = 0; current = hook.usePlaceSearch(initialCategory); while (effects.length) effects.shift()(); } }
   render();
   return { get state() { render(); return current; }, get late() { return late; }, LocationError,
     async flush() { for (let i = 0; i < 5; i++) { render(); await new Promise(resolve => setImmediate(resolve)); } },
@@ -214,6 +233,17 @@ function mountSearch({ location, search }) {
   };
 }
 const defer = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+test('consultation pharmacy entry selects pharmacy without starting location or network until explicit search', async () => {
+  let locations=0;const queries=[];
+  const app=mountSearch({initialCategory:'pharmacy',location:async()=>{locations++;return {latitude:1,longitude:2};},
+    search:async query=>{queries.push(query);return {places:[],isEnd:true};}});
+  assert.equal(app.state.category,'pharmacy');assert.equal(locations,0);assert.equal(queries.length,0);
+  app.state.changeKeyword('가상지역');await app.state.run('keyword');
+  assert.equal(locations,0);assert.equal(queries[0].category,'pharmacy');assert.equal(queries[0].coordinates,undefined);
+  await app.state.run('nearby');assert.equal(locations,1);assert.equal(queries[1].category,'pharmacy');
+  app.dispose();
+});
 test('permission denial still permits a subsequent keyword search without requesting location', async () => {
   let calls = 0, locationCalls = 0; let app;
   app = mountSearch({ location: async () => { locationCalls++; throw new app.LocationError(); }, search: async input => { calls++; assert.equal(input.mode, 'keyword'); assert.equal(input.coordinates, undefined); return { places: [], isEnd: true }; } });
@@ -237,7 +267,9 @@ test('unmount during location request never calls search or updates state after 
 test('new public route and entry links do not bypass or mutate the authentication controller', () => {
   const route = fs.readFileSync(path.join(root, 'mobile/src/app/places.tsx'), 'utf8');
   assert.equal(/useDrMAS|services\/auth|services\/supabase/.test(route), false);
-  for (const screen of ['WelcomeScreen', 'AuthScreen', 'ServicesScreen', 'PatientHome']) assert.match(fs.readFileSync(path.join(root, `mobile/src/screens/${screen}.tsx`), 'utf8'), /\/places/);
+  for (const screen of ['WelcomeScreen', 'AuthScreen', 'ServicesScreen']) assert.match(fs.readFileSync(path.join(root, `mobile/src/screens/${screen}.tsx`), 'utf8'), /\/places/);
+  const appShell = fs.readFileSync(path.join(root, 'mobile/src/app/index.tsx'), 'utf8');
+  assert.match(appShell, /patientHomeTabs/); assert.match(appShell, /key === 'places'\) \{ router\.push\('\/places'\); return; \}/);
   assert.match(fs.readFileSync(path.join(root, 'supabase/functions/search-places/.env.example'), 'utf8'), /SEARCH_PUBLIC_ENABLED=false/);
 });
 test('Expo manifest exports the public endpoint but never Kakao or Redis server secrets', () => {

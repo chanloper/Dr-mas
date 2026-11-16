@@ -2,7 +2,7 @@
 export type Category = 'hospital' | 'pharmacy';
 export type Coordinates = { latitude: number; longitude: number };
 export type PlaceQuery = { category: Category; mode: 'nearby' | 'keyword'; query: string; coordinates?: Coordinates; page: number };
-export type Place = { id: string; name: string; category: string; address: string; roadAddress: string; phone: string; distanceMeters: number | null; detailUrl: string };
+export type Place = { id: string; name: string; category: string; address: string; roadAddress: string; phone: string; distanceMeters: number | null; detailUrl: string; coordinates?: Coordinates | null };
 export type PlaceResult = { places: Place[]; isEnd: boolean };
 export const categoryCode = (category: Category) => category === 'hospital' ? 'HP8' : 'PM9';
 export function validateQuery(value: unknown): PlaceQuery {
@@ -39,7 +39,8 @@ export function normalizeKakao(value: unknown, request: PlaceQuery): PlaceResult
     if (!d || typeof d !== 'object' || d.category_group_code !== categoryCode(request.category) || !/^\d+$/.test(text(d.id)) || !text(d.place_name).trim()) throw Error('INVALID_RESPONSE');
     const distance = request.coordinates && typeof d.distance === 'string' && /^\d+(\.\d+)?$/.test(d.distance) ? Number(d.distance) : null;
     return { id: text(d.id), name: text(d.place_name), category: text(d.category_name), address: text(d.address_name),
-      roadAddress: text(d.road_address_name), phone: text(d.phone), distanceMeters: distance !== null && Number.isFinite(distance) ? distance : null, detailUrl: safeDetailUrl(d.place_url) };
+      roadAddress: text(d.road_address_name), phone: text(d.phone), distanceMeters: distance !== null && Number.isFinite(distance) ? distance : null, detailUrl: safeDetailUrl(d.place_url),
+      ...(readCoordinates(d.y, d.x) ? { coordinates: readCoordinates(d.y, d.x) } : {}) };
   });
   return { places, isEnd: v.meta.is_end || request.page >= 3 };
 }
@@ -50,7 +51,17 @@ export function validateResult(value: unknown): PlaceResult {
     if (!p || typeof p !== 'object' || !/^\d+$/.test(text(p.id)) || !text(p.name).trim()
       || p.distanceMeters !== null && (typeof p.distanceMeters !== 'number' || !Number.isFinite(p.distanceMeters) || p.distanceMeters < 0)) throw Error('INVALID_RESPONSE');
     return { id: text(p.id), name: text(p.name), category: text(p.category), address: text(p.address), roadAddress: text(p.roadAddress),
-      phone: text(p.phone), distanceMeters: p.distanceMeters, detailUrl: safeDetailUrl(p.detailUrl) };
+      phone: text(p.phone), distanceMeters: p.distanceMeters, detailUrl: safeDetailUrl(p.detailUrl),
+      ...(p.coordinates !== undefined ? { coordinates: p.coordinates === null ? null : readCoordinates(p.coordinates.latitude, p.coordinates.longitude, true) } : {}) };
   });
   return { places, isEnd: v.isEnd };
+}
+function readCoordinates(latitude: unknown, longitude: unknown, strict = false): Coordinates | null {
+  const number = (v: unknown) => typeof v === 'number' ? v : typeof v === 'string' && /^-?\d+(?:\.\d+)?$/.test(v) ? Number(v) : NaN;
+  const lat = number(latitude), lon = number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 85 || Math.abs(lon) > 180) {
+    if (strict) throw Error('INVALID_RESPONSE');
+    return null;
+  }
+  return { latitude: lat, longitude: lon };
 }

@@ -39,8 +39,11 @@ async function guarded<T>(stage: AuthStage, task: () => Promise<T>): Promise<T> 
 }
 export async function register(input: RegisterInput): Promise<RegistrationResult> {
   return guarded('signup', async () => {
-    if (input.requestedRole !== 'patient') throw new AuthError('ROLE_APPROVAL_REQUIRED', '보호자 계정은 별도 승인 절차가 필요합니다.', 403);
-    const { data, error } = await getSupabaseClient().auth.signUp({ email: input.email.trim(), password: input.password, options: { data: { display_name: input.name.trim() } } });
+    if (!['patient', 'guardian'].includes(input.requestedRole)) throw new AuthError('ROLE_INPUT', '환자 또는 보호자 중 계정 유형을 선택해 주세요.');
+    if (typeof input.name !== 'string' || !input.name.trim() || Array.from(input.name.trim()).length > 100) throw new AuthError('NAME_INPUT', '이름은 공백을 제외하고 1~100자로 입력해 주세요.');
+    // This is an account-type request, not an authority claim. The insert trigger
+    // validates the two public account types; RLS still requires patient consent.
+    const { data, error } = await getSupabaseClient().auth.signUp({ email: input.email.trim(), password: input.password, options: { data: { display_name: input.name.trim(), signup_role: input.requestedRole } } });
     if (error) throw error;
     // Confirmation-enabled projects (including obfuscated duplicate signup
     // responses) must not be presented as an authenticated account.
@@ -73,6 +76,12 @@ export async function getCurrentUser(token?: string): Promise<AuthUser> {
     }
     if (profile.error || !profile.data || profile.data.id !== data.user.id || typeof profile.data.display_name !== 'string' || !['patient', 'guardian'].includes(profile.data.role)) {
       throw new AuthError('PROFILE', '사용자 프로필을 확인할 수 없습니다. 관리자에게 문의해 주세요.');
+    }
+    const requestedRole = data.user.user_metadata?.signup_role;
+    // Fail closed when a new signup encountered the old patient-only trigger.
+    // Legacy accounts without this field keep their existing server-owned role.
+    if (requestedRole !== undefined && (!['patient', 'guardian'].includes(requestedRole) || requestedRole !== profile.data.role)) {
+      throw new AuthError('ROLE_SETUP_MISMATCH', '선택한 계정 유형과 서비스 프로필이 일치하지 않습니다. 다시 가입하지 말고 서비스 설정 확인 후 로그인해 주세요.');
     }
     logAuthDiagnostic('profile', 'success');
     // user_metadata and the role selected on the device never grant authority.

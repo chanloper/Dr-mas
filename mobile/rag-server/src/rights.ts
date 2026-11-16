@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import type {DocumentInput,MedicalDocument,Chunk} from './model.js';
+import { isKdcaDocument } from './kdca-use.js';
 export const permissionScopes=['local_search','quotation','external_embedding','external_generation'] as const;
 export type PermissionScope=typeof permissionScopes[number];
 export interface PermissionDecision {
@@ -26,6 +27,7 @@ export function validateScopes(value:unknown){
 }
 export function hasPermission(doc:MedicalDocument|undefined,scope:PermissionScope):boolean {
  if(!doc)return false;
+ if(isKdcaDocument(doc) && (scope==='external_embedding'||scope==='external_generation'))return false;
  const g=doc.rights.scopes?.[scope];
  return !!g&&g.decision==='permitted'&&complete(g,scope)&&g.documentId===doc.id
   &&g.documentVersion===doc.version&&g.contentHash===doc.contentHash&&g.contentHash===digest(doc.content);

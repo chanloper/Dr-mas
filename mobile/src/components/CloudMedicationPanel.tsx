@@ -1,3 +1,4 @@
+import { careNameLabel } from '../services/careNames';
 import { useEffect, useState } from 'react';
 import { AppState, Text, View } from 'react-native';
 import { Action, C, Field, Panel, StatusMessage, s } from './ui';
@@ -48,7 +49,7 @@ function GuardianCloudMedications({ user }: { user: AuthUser }) {
     {links.busy && <StatusMessage kind="loading">승인된 연결을 확인하고 있습니다.</StatusMessage>}
     {links.error && <StatusMessage kind="error">{links.error}</StatusMessage>}
     {links.ready && approved.length === 0 && <StatusMessage kind="empty">승인된 연결이 없습니다. 설정의 가족 연결 관리에서 확인해 주세요.</StatusMessage>}
-    {approved.map((row, index) => <View key={row.id} style={{ marginTop: 8 }}><Action small outline label={`연결된 환자 ${index + 1}${patient === row.patient_id ? ' · 선택됨' : ''}`} onPress={() => { setData(null); setPatient(row.patient_id); }} /></View>)}
+    {approved.map(row => <View key={row.id} style={{ marginTop: 8 }}><Action small outline label={`${careNameLabel(row)} · 환자 · 승인됨${patient === row.patient_id ? ' · 선택됨' : ''}`} onPress={() => { setData(null); setPatient(row.patient_id); }} /></View>)}
     {links.hasMore && <Action small outline label="연결 더 보기" disabled={links.busy} onPress={() => { void links.loadMore(); }} />}
     <View style={{ marginVertical: 12 }}><Action small outline label="다시 불러오기" onPress={() => { setData(null); links.refresh(); setReload(value => value + 1); }} /></View>
     {busy && <StatusMessage kind="loading">복약 정보를 확인하고 있습니다.</StatusMessage>}
@@ -91,30 +92,32 @@ function PatientCloudMedications({ user }: { user: AuthUser }) {
     {cloud.schedules.filter(row => showArchived || row.active).map(row => {
       const taken = cloud.records.find(record => record.medication_id === row.id)?.taken ?? false;
       return <View key={row.id} style={{ paddingVertical: 14, borderBottomWidth: 1, borderColor: C.line, gap: 8 }}>
-        <Text style={s.bodyStrong}>{row.title}{!row.active ? ' · 보관됨' : ''}</Text>
+        <Text style={s.bodyStrong}>{row.title}{!row.active ? ' · 종료된 일정' : ''}</Text>
         <Text style={s.caption}>{row.time_local.slice(0, 5)} · {row.timezone}</Text>
         {!!row.detail && <Text style={s.paragraph}>{row.detail}</Text>}
         {row.active && <Action label={taken ? '복약 완료 · 취소하기' : '복약 완료로 기록'} disabled={cloud.busy || !cloud.ready} onPress={() => { void cloud.mutate('mark', row.id, !taken); }} small />}
+        {!row.active && <Text style={s.paragraph}>{cloud.day} · {taken ? '복약 완료' : '완료 기록 없음'}</Text>}
         <View style={[s.row, { gap: 8, flexWrap: 'wrap' }]}>
           <Action label="수정" outline small disabled={cloud.busy || !cloud.ready} onPress={() => edit(row)} />
           <Action label={row.active ? '일정 보관' : '일정 복원'} outline small disabled={cloud.busy || !cloud.ready} onPress={() => { void cloud.mutate('archive', row.id, !row.active); }} />
-          <Action label="삭제" outline small danger disabled={cloud.busy || !cloud.ready} onPress={() => setRemoving(row.id)} />
+          {row.active && <Action label="삭제" outline small danger disabled={cloud.busy || !cloud.ready} onPress={() => setRemoving(row.id)} />}
         </View>
         {removing === row.id && <View style={s.confirmation}>
-          <Text style={s.paragraph}>이 일정을 삭제할까요? 복약 기록이 있는 일정은 삭제되지 않으며 보관할 수 있습니다.</Text>
+          <Text style={s.paragraph}>이 복약 일정을 삭제하시겠어요? 처방받은 약은 임의로 중단하지 말고 의사나 약사와 상담하세요.</Text>
+          <Text style={s.caption}>활성 목록에서 제거하며 과거 복약 기록은 남겨요. 지난 일정과 기록 보기에서 확인할 수 있어요.</Text>
           <Action label="삭제 확인" danger small disabled={cloud.busy || !cloud.ready} onPress={() => { void (async () => { if (await cloud.mutate('remove', row.id, false)) { if (editing === row.id) reset(); setRemoving(null); } })(); }} />
           <Action label="취소" outline small disabled={cloud.busy} onPress={() => setRemoving(null)} />
         </View>}
       </View>;
     })}
-    <View style={{ marginVertical: 12 }}><Action label={showArchived ? '현재 일정만 보기' : '보관한 일정도 보기'} outline small onPress={() => setShowArchived(value => !value)} /></View>
+    <View style={{ marginVertical: 12 }}><Action label={showArchived ? '현재 일정만 보기' : '지난 일정과 기록 보기'} outline small onPress={() => setShowArchived(value => !value)} /></View>
     <Text style={s.bodyStrong}>{editing ? '일정 수정' : '새 일정 등록'}</Text>
     <Field label="일정 이름" value={title} onChangeText={setTitle} maxLength={200} editable={cloud.ready && !cloud.busy} />
     <Field label="복약 안내" value={detail} onChangeText={setDetail} maxLength={2000} editable={cloud.ready && !cloud.busy} multiline />
     <Field label="복약 시간 (HH:mm)" value={time} onChangeText={setTime} maxLength={5} editable={cloud.ready && !cloud.busy} autoCorrect={false} />
     <Action label={editing ? '변경 저장' : '일정 등록'} disabled={!cloud.ready || cloud.busy} onPress={() => { void save(); }} />
     {editing && <View style={{ marginTop: 8 }}><Action label="수정 취소" outline small disabled={cloud.busy} onPress={reset} /></View>}
-    <Text style={[s.caption, { marginTop: 12 }]}>보관은 기존 복약 기록을 삭제하지 않습니다. 약품이나 복용량을 추천하는 기능은 아닙니다.</Text>
+    <Text style={[s.caption, { marginTop: 12 }]}>일정 삭제·보관은 과거 복약 기록을 영구 삭제하지 않습니다. 약품이나 복용량을 추천하는 기능은 아닙니다.</Text>
   </Panel>;
 }
 export function CloudMedicationPanel() {

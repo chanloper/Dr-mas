@@ -4,7 +4,8 @@ import { SearchIndex, insufficientEvidenceMessage, type Hit, type SearchOptions 
 import { GuardedProvider, embeddingProfile } from './gemini.js';
 import {hasPermission,hasChunkPermission} from './rights.js';
 export function routeSafety(question:string):'emergency'|'professional'|'privacy'|null {
- if(/숨.{0,4}(못|안|않)|호흡곤란|의식.{0,4}(없|잃)|가슴.{0,8}(통증|아프)|심한.{0,4}출혈|자살|자해|과다.?복용|죽고.?싶/iu.test(question))return 'emergency';
+ if(/말(?:이)?\s*(?:어눌|안\s*나)|언어\s*장애|(?:팔다리|한쪽|팔|다리).{0,12}(?:힘이?\s*(?:없|빠)|마비)|시야\s*이상|시각\s*장애|앞이\s*안\s*보|숨\s*쉬기(?:가)?\s*(?:어려|힘들)|갑자기.{0,16}(?:극심|매우\s*심)/u.test(question))return 'emergency';
+ if(/숨.{0,4}(못|안|않)|호흡곤란|의식.{0,4}(없|잃)|가슴.{0,8}(통증|아프|답답)|심한.{0,4}출혈|자살|자해|과다.?복용|죽고.?싶/iu.test(question))return 'emergency';
  if(/주민등록|\b\d{6}[- ]?[1-4]\d{6}\b|01[016789][- ]?\d{3,4}[- ]?\d{4}|환자명|진료기록|복약기록/u.test(question))return 'privacy';
  if(/몇\s*(알|정|mg|밀리)|용량|진단해|진단해줘|약.{0,10}(끊|중단|바꿔|늘려|줄여)|처방.{0,8}(중단|변경)|나.{0,5}치료법/u.test(question))return 'professional';
  return null;

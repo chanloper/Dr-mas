@@ -1,3 +1,4 @@
+import { careNameLabel } from '../services/careNames';
 import React, { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { careLinkStatus, type CareActor, type CareLink } from '../services/careLinks';
@@ -20,8 +21,8 @@ export function CareLinksSession({ actor }: { actor: CareActor }) {
   }
   function row(link: CareLink) {
     return <View key={link.id} style={s.listItem}>
-      <Text style={s.bodyStrong}>{patient ? '보호자' : '환자'} 계정 ID</Text>
-      <Text selectable style={s.caption}>{patient ? link.guardian_id : link.patient_id}</Text>
+      <Text style={s.bodyStrong}>{careNameLabel(link)}</Text>
+      <Text style={s.caption}>관계: {patient ? '보호자' : '환자'} · 승인된 연결에서만 등록된 이름을 확인할 수 있어요.</Text>
       <View style={{ marginTop: 8 }}><Chip text={careLinkStatus(link)} kind={link.status === 'approved' ? 'green' : 'neutral'} /></View>
       <Text style={s.caption}>요청일: {new Date(link.created_at).toLocaleDateString('ko-KR')}</Text>
       {link.status === 'revoked' && <Text style={s.caption}>종료일: {link.revoked_at ? new Date(link.revoked_at).toLocaleDateString('ko-KR') : '확인되지 않음'} · 이전 연결 이력</Text>}

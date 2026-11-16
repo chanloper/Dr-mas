@@ -3,6 +3,7 @@ import { createClient, processLock, type SupabaseClient } from '@supabase/supaba
 import Constants from 'expo-constants';
 import { secureSessionStorage } from './secureSessionStorage';
 import { logAuthDiagnostic } from './authDiagnostics';
+import { supabaseRequestTimeout } from './supabaseRequestTimeout';
 
 export class SupabaseConfigError extends Error {}
 let client: SupabaseClient | undefined;
@@ -52,7 +53,7 @@ export function getSupabaseClient(): SupabaseClient {
         const signal = init?.signal;
         if (signal?.aborted) abort();
         else signal?.addEventListener('abort', abort, { once: true });
-        const timer = setTimeout(abort, 15000);
+        const timer = setTimeout(abort, supabaseRequestTimeout(input, init, parsed.origin));
         try { return await fetch(input, { ...init, signal: controller.signal }); }
         finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
       },

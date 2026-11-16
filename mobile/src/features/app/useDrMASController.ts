@@ -4,7 +4,12 @@ import { localMedications, LocalMedicationError } from '../../services/localMedi
 import type { Role, Route, Tab, Medication, Chat } from './types';
 import * as auth from '../../services/auth';
 import { sendRagChat, ragErrorMessage } from '../../services/rag';
-import type { RagReply } from '../../services/ragClient';
+import type { RagReply, RagRequestOptions } from '../../services/ragClient';
+import { useConsultationHistory } from './useConsultationHistory';
+import { emergencyGuidance, emergencyFollowup } from '../../services/emergencyGuidance';
+import { explicitEmergency } from '../../services/consultationFlow';
+import type { SetStateAction } from 'react';
+import type { EmergencyRecord } from '../../services/consultationHistory';
 const seedMeds: Medication[] = [
   { id: '1', title: '아침 복약', detail: '예시 일정 · 식후', time: '08:00', taken: false },
   { id: '2', title: '점심 복약', detail: '예시 일정 · 식후', time: '13:00', taken: false },
@@ -40,6 +45,7 @@ export function useDrMASController() {
   const owner = useRef<string | null>(null);
   const chatRequest = useRef<{ controller: AbortController; epoch: number; userId: string } | null>(null);
   const [chatLoading, setChatLoading] = useState(false), [chatNotice, setChatNotice] = useState<string | null>(null);
+  const [chatStage, setChatStage] = useState<Parameters<NonNullable<RagRequestOptions['onStage']>>[0]>('session');
   const record = useRef<{ userId: string; day: string; ids: string[]; epoch: number; busy: boolean } | null>(null);
   const loadEpoch = useRef(0);
   const [meds, setMeds] = useState<Medication[]>([]);
@@ -48,8 +54,16 @@ export function useDrMASController() {
   const [medsSaving, setMedsSaving] = useState(false);
   const [medsReload, setMedsReload] = useState(0);
   const [medsDay, setMedsDay] = useState(todayKey);
-  const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<Chat[]>(initialMessages);
+  const consultation = useConsultationHistory(user?.id ?? null);
+  const resetConsultations = consultation.reset;
+  const chatInput = consultation.current.draft;
+  const messages = consultation.current.messages.length ? consultation.current.messages : initialMessages();
+  const setChatInput = (value: SetStateAction<string>) => consultation.update('draft', value);
+  const setMessages = (value: SetStateAction<Chat[]>) => consultation.update('messages', previous => {
+    const old = previous.length ? previous : initialMessages();
+    return typeof value === 'function' ? value(old) : value;
+  });
+  const updateChat = useRef(setMessages); updateChat.current = setMessages;
   const [sosLeft, setSosLeft] = useState<number | null>(null);
   const [sosNotice, setSosNotice] = useState(false);
   const [sosAcknowledged, setSosAcknowledged] = useState(false);
@@ -69,12 +83,12 @@ export function useDrMASController() {
     invalidateSession();
     setMeds([]); setMedsReady(false); setMedsError(null); setMedsSaving(false);
     setMedsReload(value => value + 1);
-    setChatInput(''); setMessages(initialMessages()); messageCounter.current = 2;
+    resetConsultations(); messageCounter.current = 2;
     setChatLoading(false); setChatNotice(null);
     setSosLeft(null); setSosNotice(false); setSosAcknowledged(false); setSosDelay(10);
     setPassword(''); setConfirm(''); setShowPassword(false); setName(''); setEmail(''); setTab('home'); setRole('patient');
     setShowConfirmPassword(false); setAuthNotice(null); setSignupProcessed(false);
-  }, [invalidateSession]);
+  }, [invalidateSession, resetConsultations]);
   const acceptUser = useCallback((account: auth.AuthUser) => {
     resetPrivateState(); owner.current = account.id; switchDay(todayKey());
     setUser(account); setRole(account.role); setName(account.name); setEmail(account.email);
@@ -91,7 +105,7 @@ export function useDrMASController() {
         if (active && epoch === sessionEpoch.current) acceptUser(account);
       } catch (error) {
         if (!active || epoch !== sessionEpoch.current) return;
-        if (error instanceof auth.AuthError && ['PROFILE', 'PROFILE_SCHEMA', 'PROFILE_PERMISSION'].includes(error.code)) {
+        if (error instanceof auth.AuthError && ['PROFILE', 'PROFILE_SCHEMA', 'PROFILE_PERMISSION', 'ROLE_SETUP_MISMATCH'].includes(error.code)) {
           setSignupProcessed(true);
           setAuthNotice('계정 인증은 확인했지만 서비스 이용 정보를 불러오지 못했습니다. 다시 가입할 필요는 없습니다.');
         }
@@ -203,6 +217,7 @@ export function useDrMASController() {
       }
       const account = await auth.getCurrentUser(result.accessToken);
       if (epoch !== sessionEpoch.current) return;
+      if (registering && account.role !== role) throw new auth.AuthError('ROLE_SETUP_MISMATCH', '선택한 계정 유형과 서비스 프로필이 일치하지 않습니다. 다시 가입하지 말고 서비스 설정 확인 후 로그인해 주세요.');
       await auth.saveToken(result.accessToken);
       if (epoch === sessionEpoch.current) acceptUser(account);
     } catch (error) {
@@ -256,22 +271,38 @@ export function useDrMASController() {
     loadEpoch.current++; record.current = null; setMeds([]); setMedsReady(false); setMedsError(null);
     setMedsReload(value => value + 1);
   }
-  async function sendChat() {
+  async function sendChat(retryQuestion?: string, clearSubmittedDraft = false) {
     if (!owner.current || chatRequest.current) return;
-    const text = chatInput.trim();
-    if (!text || chatInput.length > 2000) { setChatNotice('질문은 1~2000자로 입력해 주세요.'); return; }
+    if (consultation.current.emergency) { sendEmergencyQuestion(retryQuestion, clearSubmittedDraft); return; }
+    const input = retryQuestion ?? chatInput;
+    const text = input.trim();
+    if (!text || input.length > 2000) { setChatNotice('질문은 1~2000자로 입력해 주세요.'); return; }
+    // Commit the first emergency turn and mode together in the shared session.
+    // No child interview/effect, JWT refresh or network response is required.
+    if (explicitEmergency(text)) {
+      const emergency: EmergencyRecord = { ...emergencyGuidance(text, text), reported: text, context: text };
+      consultation.update('emergency', emergency);
+      setMessages(old => [...old, { id: messageCounter.current++, sender: 'user', text },
+        { id: messageCounter.current++, sender: 'assistant', text: emergency.message, status: 'emergency', outcome: 'response', emergency }]);
+      if (retryQuestion === undefined || clearSubmittedDraft) setChatInput(old => old === input ? '' : old);
+      return;
+    }
     const epoch = sessionEpoch.current;
     const userId = owner.current;
     const task = { controller: new AbortController(), epoch, userId };
     chatRequest.current = task; setChatLoading(true); setChatNotice(null);
+    setChatStage('session');
     setMessages(old => [...old, { id: messageCounter.current++, sender: 'user', text }]);
-    setChatInput('');
+    if (retryQuestion === undefined || clearSubmittedDraft) setChatInput(old => old === input || clearSubmittedDraft ? '' : old);
     try {
-      const reply: RagReply | string = await sendRagChat(text, { signal: task.controller.signal });
+      const reply: RagReply | string = await sendRagChat(text, { signal: task.controller.signal, onStage: stage => {
+        if (chatRequest.current === task && sessionEpoch.current === epoch && owner.current === userId) setChatStage(stage);
+      } });
       if (chatRequest.current === task && sessionEpoch.current === epoch && owner.current === userId) setMessages(old => [...old, {
         id: messageCounter.current++, sender: 'assistant', text: typeof reply === 'string' ? reply : reply.text,
         ...(typeof reply === 'string' ? {} : { sources: reply.sources, status: reply.status }), outcome: 'response',
       }]);
+      if (chatRequest.current === task && typeof reply !== 'string' && reply.status === 'emergency') markEmergency(text, text);
     } catch (error) {
       if (chatRequest.current === task && sessionEpoch.current === epoch && owner.current === userId) setMessages(old => [...old, { id: messageCounter.current++, sender: 'assistant', text: ragErrorMessage(error), outcome: 'error' }]);
     } finally { if (chatRequest.current === task) { chatRequest.current = null; setChatLoading(false); } }
@@ -281,8 +312,26 @@ export function useDrMASController() {
     chatRequest.current = null; task.controller.abort();
     if (sessionEpoch.current !== task.epoch || owner.current !== task.userId) return;
     setChatLoading(false);
-    setMessages(old => [...old, { id: messageCounter.current++, sender: 'assistant', text: '요청을 취소했습니다. 늦게 도착하는 결과는 표시하지 않습니다.', outcome: 'cancelled' }]);
+    updateChat.current(old => [...old, { id: messageCounter.current++, sender: 'assistant', text: '요청을 취소했습니다. 늦게 도착하는 결과는 표시하지 않습니다.', outcome: 'cancelled' }]);
   }, []);
+  function markEmergency(reported: string, context: string) {
+    consultation.update('emergency', old => old ?? { ...emergencyGuidance(reported, context), reported, context });
+  }
+  function sendEmergencyQuestion(retryQuestion?: string, clearSubmittedDraft = false) {
+    const emergency = consultation.current.emergency;
+    const question = (retryQuestion ?? chatInput).trim();
+    if (!owner.current || !emergency || !question || question.length > 2000) return;
+    const guide = emergencyFollowup(question, emergency.reported, emergency.context);
+    const answer: EmergencyRecord = { ...guide, reported: emergency.reported, context: emergency.context };
+    setMessages(old => [...old,
+      { id: messageCounter.current++, sender: 'user', text: question },
+      { id: messageCounter.current++, sender: 'assistant', text: guide.message, outcome: 'response', status: 'emergency', emergency: answer },
+    ]);
+    if (retryQuestion === undefined || clearSubmittedDraft) setChatInput('');
+  }
+  function changeConsultation(action: () => void) {
+    cancelChat(); action(); setChatNotice(null); setChatLoading(false);
+  }
   useEffect(() => { if (tab !== 'ai') cancelChat(); }, [tab, cancelChat]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', state => { if (state !== 'active') cancelChat(); });
@@ -301,7 +350,11 @@ export function useDrMASController() {
     meds, medsReady, medsError, medsSaving, retryMedications, messages, chatInput, setChatInput, sosLeft, setSosLeft, sosNotice,
     sosAcknowledged, setSosAcknowledged, sosDelay, setSosDelay,
     roleLabel, takenCount, selectRole, submitAuth, signOut,
-    toggleMedication, sendChat, cancelChat, chatLoading, chatNotice, startSOS,
+    toggleMedication, sendChat, cancelChat, chatLoading, chatStage, chatNotice, startSOS,
+    consultation, markEmergency, sendEmergencyQuestion,
+    newConsultation: () => changeConsultation(consultation.start),
+    openConsultation: (id: number) => changeConsultation(() => consultation.open(id)),
+    deleteConsultation: (id?: number) => changeConsultation(() => consultation.remove(id)),
   };
 }
 export type DrMASController = ReturnType<typeof useDrMASController>;

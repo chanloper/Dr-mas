@@ -60,9 +60,10 @@ export default function AuthScreen() {
           {signupProcessed ? <View style={{ gap: 8, marginTop: 14 }}>
             <Text style={s.caption}>이미 요청한 계정으로 로그인해 주세요. 다른 계정은 아래 버튼으로 전환할 수 있습니다.</Text>
             <Action label="다른 계정 사용" onPress={signOut} outline small disabled={authLoading} />
-          </View> : role === 'guardian' && !registering ? <StatusMessage>보호자는 승인된 보호자 계정으로 로그인해 주세요. 보호자 계정의 신규 발급이나 역할 변경은 관리자에게 문의해 주세요.</StatusMessage> : <Pressable accessibilityRole="button" disabled={authLoading} accessibilityState={{ disabled: authLoading }} onPress={() => { setAuthError(null); setAuthNotice(null); setRoute(registering ? 'login' : 'register'); clearPasswords(); }} style={{ padding: 14, alignItems: 'center' }}>
+          </View> : <Pressable accessibilityRole="button" disabled={authLoading} accessibilityState={{ disabled: authLoading }} onPress={() => { setAuthError(null); setAuthNotice(null); setRoute(registering ? 'login' : 'register'); clearPasswords(); }} style={{ padding: 14, alignItems: 'center' }}>
             <Text style={s.link}>{route === 'login' ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}</Text>
           </Pressable>}
+          {role === 'guardian' && <Text style={s.caption}>보호자로 가입해도 환자가 가족 연결을 승인하기 전에는 환자의 건강정보를 볼 수 없어요.</Text>}
         </Panel>
         {authError?.includes('삭제') && <Action label="로그아웃 다시 시도" onPress={signOut} outline disabled={authLoading} />}
       </ScrollView>

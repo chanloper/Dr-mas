@@ -6,6 +6,71 @@ const ts=require('typescript');
 const {createHarness}=require('./controller-harness.cjs');
 function load(){const sandbox={exports:{},URL,AbortController,setTimeout,clearTimeout};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/services/ragClient.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,sandbox);return sandbox.exports;}
 const response=(status=200)=>({ok:status===200,status,json:async()=>({status:'insufficient_evidence',message:'확인된 자료가 부족하여 답변할 수 없습니다',disclaimer:'진단·처방을 대신하지 않습니다',sources:[]})});
+
+test('shared-space Wi-Fi HTTP works only in development and never broadens production policy',()=>{
+ const {validateRagBaseUrl}=load();
+ for(const host of ['100.64.0.1','100.100.111.3','100.127.255.254']){
+  assert.equal(validateRagBaseUrl(`http://${host}:8787`,true).hostname,host);
+  assert.throws(()=>validateRagBaseUrl(`http://${host}:8787`,false),e=>e.code==='CONFIG');
+ }
+ for(const host of ['100.63.255.254','100.128.0.1','8.8.8.8'])assert.throws(()=>validateRagBaseUrl(`http://${host}:8787`,true),e=>e.code==='CONFIG');
+});
+
+test('token network/storage failure is not mislabeled as expired login; no HTTP request is sent',async()=>{
+ const {requestRagResult}=load();let calls=0;
+ for(const [code,expected] of [['NETWORK','AUTH_UNAVAILABLE'],['SERVER','AUTH_UNAVAILABLE'],['STORAGE','SESSION_STORAGE'],['CONFIG','CONFIG'],['UNAUTHORIZED','UNAUTHORIZED'],['RATE_LIMITED','RATE_LIMITED']]){
+  await assert.rejects(requestRagResult('Synthetic question',{url:'https://rag.example',development:false,
+   token:async()=>{throw {code};},transport:async()=>{calls++;return response();}}),e=>e.code===expected&&e.stage==='session');
+ }
+ assert.equal(calls,0);
+});
+
+test('progress reflects real client stages and late cancelled transport cannot advance progress',async()=>{
+ const {requestRagResult}=load();const stages=[];
+ const common={url:'https://rag.example',development:false,token:async()=>'synthetic'};
+ await requestRagResult('Synthetic question',{...common,transport:async()=>response(),onStage:s=>stages.push(s)});
+ assert.deepEqual(stages,['session','http','response']);
+ const controller=new AbortController();let release;const late=[];
+ const pending=requestRagResult('Synthetic question',{...common,signal:controller.signal,onStage:s=>late.push(s),transport:()=>new Promise(r=>release=r)});
+ await new Promise(r=>setImmediate(r));controller.abort();await assert.rejects(pending,e=>e.code==='CANCELLED');
+ release(response());await new Promise(r=>setImmediate(r));assert.deepEqual(late,['session','http']);
+});
+
+test('retry sends the failed question once, keeps draft, and ignores progress after cancellation',async()=>{
+ const pending=[];const app=mountChat({sendRagChat:(question,options)=>new Promise(resolve=>pending.push({question,options,resolve})),ragErrorMessage:()=> 'safe error'});
+ await app.flush();app.state.setTab('ai');await app.flush();app.state.setChatInput('New unsent draft');
+ const first=app.state.sendChat('Failed synthetic question');await app.flush();
+ await app.state.sendChat('Failed synthetic question');assert.equal(pending.length,1);
+ assert.equal(pending[0].question,'Failed synthetic question');assert.equal(app.state.chatInput,'New unsent draft');
+ pending[0].options.onStage('http');await app.flush();assert.equal(app.state.chatStage,'http');
+ app.state.cancelChat();pending[0].options.onStage('response');await app.flush();assert.equal(app.state.chatStage,'http');
+ pending[0].resolve('late');await first;await app.flush();assert.ok(!app.state.messages.some(m=>m.text==='late'));app.dispose();
+});
+
+test('client deadline identifies session, HTTP wait and response parsing without increasing timeout',async()=>{
+ const {requestRagResult,ragErrorMessage}=load();
+ const pending=()=>new Promise(()=>{});
+ for(const stage of ['session','http','response']){
+  const options={url:'https://rag.example',development:false,timeoutMs:15,
+   token:stage==='session'?pending:async()=>'synthetic',
+   transport:stage==='http'?pending:async()=>({...response(),json:pending})};
+  await assert.rejects(requestRagResult('synthetic question',options),e=>e.code==='TIMEOUT'&&e.stage===stage&&typeof ragErrorMessage(e)==='string');
+ }
+});
+test('approved grounded_answer requires sources and preserves source details',async()=>{
+ const {requestRagResult}=load();const body={status:'grounded_answer',message:'Synthetic grounded answer',disclaimer:'Synthetic only',sources:[]};
+ const options={url:'https://rag.example',development:false,token:async()=>'synthetic',transport:async()=>({...response(),json:async()=>body})};
+ await assert.rejects(requestRagResult('Synthetic query',options),e=>e.code==='SERVER');
+ body.sources=[{documentId:'sample',chunkId:'sample:1:0',title:'Synthetic source',quote:'Synthetic quotation',sourceUrl:'https://example.org/sample'}];
+ const reply=await requestRagResult('Synthetic query',options);assert.equal(reply.status,'grounded_answer');assert.equal(reply.sources[0].chunkId,'sample:1:0');
+});
+
+test('auth service outage and invalid JSON have actionable distinct failures without leaking bodies',async()=>{
+ const {requestRagResult,ragErrorMessage}=load();const common={url:'https://rag.example',development:false,token:async()=>'synthetic'};
+ for(const [reply,code] of [[{...response(503),json:async()=>({error:'AUTH_UNAVAILABLE'})},'AUTH_UNAVAILABLE'],[{...response(),json:async()=>{throw Error('private body');}},'RESPONSE']]){
+  await assert.rejects(requestRagResult('Synthetic question',{...common,transport:async()=>reply}),error=>error.code===code&&!ragErrorMessage(error).includes('private'));
+ }
+});
 test('client sends only question and bearer to configured server',async()=>{
  const {requestRag}=load();let count=0;
  const text=await requestRag('일반 질문',{url:'https://rag.example',development:false,token:async()=>'synthetic-token',transport:async(url,init)=>{count++;assert.equal(url,'https://rag.example/api/rag/chat');assert.equal(init.headers.Authorization,'Bearer synthetic-token');assert.deepEqual(JSON.parse(init.body),{question:'일반 질문'});return response();}});
@@ -34,6 +99,12 @@ function mountChat(rag){
  const auth={readToken:async()=>'fictional-session',getCurrentUser:async()=>({id:'fictional-user',name:'Fictional',email:'fictional@example.invalid',role:'patient'}),watchSession:()=>()=>{},clearToken:async()=>{},authErrorMessage:()=> '오류'};
  return createHarness({auth,storage:{getItem:async()=>null,setItem:async()=>{}},rag}).mount();
 }
+test('SOS setting survives screen changes within session and resets after logout/restoration',async()=>{
+ const app=mountChat({});await app.flush();app.state.setSosDelay(47);app.state.setTab('settings');await app.flush();
+ app.state.setTab('home');await app.flush();assert.equal(app.state.sosDelay,47);
+ await app.state.signOut();await app.flush();assert.equal(app.state.sosDelay,10);app.dispose();
+ const restored=mountChat({});await restored.flush();assert.equal(restored.state.sosDelay,10);restored.dispose();
+});
 test('controller sends question once and suppresses reply after logout',async()=>{
  let resolve,calls=0;
  const app=mountChat({sendRagChat:async question=>{calls++;assert.equal(question,'일반 질문');return new Promise(r=>{resolve=r;});},ragErrorMessage:()=> '오류'});

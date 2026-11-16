@@ -1,3 +1,4 @@
+/* global __dirname */
 // Synthetic accounts and element props only; no native renderer or network.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -126,11 +127,25 @@ test('busy auth disables fields and submit; existing-account status does not off
   assert.equal(ui.nodes.find(n => n.type === 'KeyboardAvoidingView').props.behavior, 'height');
 });
 
-test('guardian login does not advertise unsupported self-service guardian signup', () => {
+test('guardian can open signup and is told patient approval is still required', () => {
   const ui = screen({ route: 'login', role: 'guardian', roleLabel: '보호자' });
-  assert.equal(ui.nodes.some(n => typeof n.props?.children === 'string' && n.props.children.includes('계정이 없으신가요? 회원가입')), false);
-  assert.ok(ui.nodes.some(n => typeof n.props?.children === 'string' && n.props.children.includes('승인된 보호자 계정')));
+  assert.equal(ui.nodes.some(n => typeof n.props?.children === 'string' && n.props.children.includes('계정이 없으신가요? 회원가입')), true);
+  assert.ok(ui.nodes.some(n => typeof n.props?.children === 'string' && n.props.children.includes('환자가 가족 연결을 승인')));
   assert.ok(ui.nodes.some(n => n.type === 'Action' && n.props.label === '로그인' && n.props.disabled === false));
+});
+
+test('guardian signup opens its server-returned dashboard; a wrong role never enters dashboard',async()=>{
+ const f=fixture(),app=f.mount();await app.flush();app.state.selectRole('guardian');fill(app,true);let selected;
+ f.api.register=async value=>{selected=value.requestedRole;return{accessToken:'fixture-session'};};
+ await app.state.submitAuth();await app.flush();
+ assert.equal(selected,'guardian');assert.equal(app.state.user,null);assert.equal(app.state.route,'login');
+ assert.equal(app.state.signupProcessed,true);assert.ok(app.state.authError);assert.equal(f.medicationReads,0);
+ f.api.getCurrentUser=async()=>({...profile,role:'guardian'});
+ app.state.setPassword('fixture-password');await app.state.submitAuth();await app.flush();
+ assert.equal(app.state.role,'guardian');assert.equal(app.state.user.role,'guardian');assert.equal(app.state.route,'dashboard');app.dispose();
+ const good=fixture(),fresh=good.mount();await fresh.flush();fresh.state.selectRole('guardian');fill(fresh,true);
+ good.api.getCurrentUser=async()=>({...profile,role:'guardian'});
+ await fresh.state.submitAuth();await fresh.flush();assert.equal(fresh.state.route,'dashboard');assert.equal(fresh.state.role,'guardian');fresh.dispose();
 });
 test('user screens no longer contain development/student copy while incomplete-service warnings remain', () => {
   const dir = path.join(__dirname, '../src/screens');
@@ -138,9 +153,10 @@ test('user screens no longer contain development/student copy while incomplete-s
     const source = fs.readFileSync(path.join(dir, file), 'utf8');
     assert.equal(/체험용|시연용|졸업작품|과제|\bMVP\b|\bMAP\b|UI 체험/.test(source), false, file);
   }
-  assert.match(fs.readFileSync(path.join(dir, 'AiScreen.tsx'), 'utf8'), /자동 의료 상담이 제공되지 않습니다/);
+  assert.match(fs.readFileSync(path.join(dir, 'AiScreen.tsx'), 'utf8'), /증상에 맞는 자료가 부족할 수 있으며, 진단은 하지 않아요/);
   assert.match(fs.readFileSync(path.join(dir, 'PatientHome.tsx'), 'utf8'), /<SosPanel/);
   const sos = fs.readFileSync(path.join(dir, '../components/SosPanel.tsx'), 'utf8');
   assert.match(sos, /백그라운드 푸시는 지원하지 않습니다/);
-  assert.match(sos, /119 전화 연결이나 자동 신고를 실행하지 않습니다/);
+  assert.match(sos, /SOS는 보호자에게 보내는 요청이며 119에 자동 연결되지 않습니다/);
+  assert.match(sos, /119 버튼을 누른 뒤 전화 앱에서 직접 발신하세요/);
 });

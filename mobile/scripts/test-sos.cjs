@@ -55,22 +55,67 @@ test('foreign, malformed and duplicate returned rows fail closed',async()=>{
 test('invalid recipient count cannot produce success',async()=>{
  for(const v of [0,-1,'1',null,1.5]){const f=fixture();f.setData(v);await assert.rejects(f.repo.send(patient),e=>e.code==='SERVER');}
 });
-function mount(repo,actor=patient){
+function mount(repo,actor=patient,delay=10,compact=false,readNames=async()=>[]){
+ let event,subscriptions=0,cleanups=0;
  let cursor=0,dirty=true,disposed=false,late=0,tree;const slots=[],effects=[],timers=new Map(),intervals=new Map();let timerId=0,listener;
  const hooks={useState(v){const i=cursor++;if(!(i in slots))slots[i]=v;return [slots[i],v=>{if(disposed){late++;return;}slots[i]=typeof v==='function'?v(slots[i]):v;dirty=true;}];},useRef(v){const i=cursor++;return slots[i]??={current:v};},useEffect(fn,deps){const i=cursor++,old=slots[i];if(!old||!deps||deps.some((v,j)=>v!==old.deps[j]))effects.push(()=>{old?.cleanup?.();slots[i]={deps,cleanup:fn()};});}};
- const context={exports:{},setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),setInterval:fn=>{intervals.set(++timerId,fn);return timerId;},clearInterval:id=>intervals.delete(id),require:name=>{
- if(name==='react')return hooks;if(name==='react/jsx-runtime')return require(name);
- if(name==='react-native')return {Text:'Text',View:'View',AppState:{currentState:'active',addEventListener:(_,fn)=>{listener=fn;return {remove(){listener=null;}};}}};
- if(name==='../services/sos')return {...api,createSosRepository:()=>repo};if(name==='../services/supabase')return {getSupabaseClient:()=>({})};if(name==='./EmergencyCallButton')return {EmergencyCallButton:'EmergencyCallButton'};if(name==='./ui')return {Action:'Action',Panel:'Panel',StatusMessage:'StatusMessage',C:{danger:'#DC2626'},s:{}};throw Error(name);
+ const context={exports:{},setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{fn.delay=ms;intervals.set(++timerId,fn);return timerId;},clearInterval:id=>intervals.delete(id),require:name=>{if(name.endsWith('/careNames'))return {careNameLabel:row=>row.status==='approved'&&row.display_name!==undefined?(row.display_name?.trim()||'이름 미등록'):'이름 확인 불가',withCareNames:async(_c,_a,rows)=>rows,readApprovedCareNames:readNames};if(name.endsWith('/sosRealtime'))return {watchSos:(_client,_actor,changed)=>{event=changed;subscriptions++;return ()=>{cleanups++;event=null;};}};
+ if(name==='../services/sosDelay'){const b={exports:{}};vm.runInNewContext(compile('src/services/sosDelay.ts'),b);return b.exports;}if(name==='react')return hooks;if(name==='react/jsx-runtime')return require(name);
+ if(name==='react-native')return {Text:'Text',View:'View',Pressable:'Pressable',Platform:{OS:'android'},AccessibilityInfo:{isReduceMotionEnabled:async()=>true,addEventListener:()=>({remove(){}})},LayoutAnimation:{Presets:{easeInEaseOut:{}},configureNext(){}},AppState:{currentState:'active',addEventListener:(_,fn)=>{listener=fn;return {remove(){listener=null;}};}}};
+ if(name==='../services/sos')return {...api,createSosRepository:()=>repo};if(name==='../services/supabase')return {getSupabaseClient:()=>({})};if(name==='./EmergencyCallButton')return {EmergencyCallButton:'EmergencyCallButton'};if(name==='./ui')return {Action:'Action',AppIcon:'AppIcon',Chip:'Chip',Panel:'Panel',StatusMessage:'StatusMessage',C:{danger:'#DC2626'},s:{caption:{}}};throw Error(name);
  }};vm.runInNewContext(compile('src/components/SosPanel.tsx'),context);
- function render(){let n=0;while(dirty&&!disposed){assert.ok(n++<30);dirty=false;cursor=0;tree=context.exports.SosPanel({actor,delay:10});while(effects.length)effects.shift()();}}
+ function render(){let n=0;while(dirty&&!disposed){assert.ok(n++<30);dirty=false;cursor=0;tree=context.exports.SosPanel({actor,delay,compact});while(effects.length)effects.shift()();}}
  function nodes(){render();const out=[];function visit(n){if(Array.isArray(n))return n.forEach(visit);if(n&&typeof n==='object'){out.push(n);visit(n.props?.children);}}visit(tree);return out;}
  async function flush(){for(let i=0;i<5;i++){render();await new Promise(r=>setImmediate(r));}render();}
- render();return {nodes,flush,press(label){nodes().find(n=>n.props?.label===label).props.onPress();render();},tick(){const pending=[...timers];timers.clear();pending.forEach(([,fn])=>fn());render();},poll(){intervals.forEach(fn=>fn());},background(){listener('background');render();},dispose(){disposed=true;slots.forEach(s=>s?.cleanup?.());},get late(){return late;}};
+ render();return {nodes,flush,event(){event?.();},foreground(){listener('active');render();},get subscriptions(){return subscriptions;},get cleanups(){return cleanups;},press(label){nodes().find(n=>n.props?.label===label||n.props?.accessibilityLabel===label).props.onPress();render();},tick(){const pending=[...timers];timers.clear();pending.forEach(([,fn])=>fn());render();},poll(){intervals.forEach(fn=>fn());},background(){listener('background');render();},dispose(){disposed=true;slots.forEach(s=>s?.cleanup?.());},get late(){return late;},get pollDelays(){return [...intervals.values()].map(fn=>fn.delay);}};
 }
+
+test('guardian event refreshes without polling, deduplicates visible rows and resyncs on foreground',async()=>{
+ let rows=[],reads=0;const app=mount({list:async()=>{reads++;return rows;},acknowledge:async()=>{}},guardian,10,true);
+ await app.flush();assert.equal(app.subscriptions,1);
+ rows=[row()];app.event();app.event();app.event();await app.flush();
+ assert.equal(app.nodes().filter(n=>n.props?.label==='요청 확인 완료').length,1);
+ assert.ok(app.nodes().some(n=>n.props?.label==='SOS 내역 새로고침'));
+ assert.ok(reads>=2);app.background();assert.equal(app.cleanups,1);
+ rows=[];app.foreground();await app.flush();assert.equal(app.subscriptions,2);
+ assert.equal(app.nodes().filter(n=>n.props?.label==='요청 확인 완료').length,0);
+ app.dispose();assert.equal(app.cleanups,2);assert.equal(app.late,0);
+});
+
+test('patient compact SOS always exposes dialer without starting a countdown',async()=>{
+ let sent=0;const app=mount({list:async()=>[],send:async()=>{sent++;return 1;}},patient,10,true);
+ await app.flush();assert.equal(app.nodes().filter(n=>n.type==='EmergencyCallButton').length,1);
+ assert.equal(sent,0);app.dispose();
+});
+
+test('every integer slider setting initializes the countdown; adjustment itself never sends',async()=>{
+ const b={exports:{}};vm.runInNewContext(compile('src/services/sosDelay.ts'),b);
+ for(let seconds=10;seconds<=60;seconds++){
+  assert.equal(b.exports.sosDelayAtPosition((seconds-10)*4,200),seconds);
+  let sent=0;const app=mount({list:async()=>[],send:async()=>{sent++;return 1;}},patient,seconds);
+  await app.flush();assert.equal(sent,0);app.press('SOS 알림 시작');
+  assert.ok(app.nodes().some(n=>n.props?.children===`${seconds}초`||Array.isArray(n.props?.children)&&n.props.children[0]===seconds));
+  app.press('SOS 요청 취소');for(let i=0;i<61;i++)app.tick();assert.equal(sent,0);app.dispose();
+ }
+ for(const [value,expected] of [[NaN,10],[-1,10],[61,60],[25.6,26]])assert.equal(b.exports.normalizeSosDelay(value),expected);
+});
+
+test('a 37-second manual countdown sends only at its end using an in-memory repository',async()=>{
+ let sent=0;const app=mount({list:async()=>[],send:async()=>{sent++;return 1;}},patient,37);
+ await app.flush();app.press('SOS 알림 시작');for(let i=0;i<36;i++)app.tick();assert.equal(sent,0);
+ app.tick();await app.flush();assert.equal(sent,1);app.dispose();
+});
 test('countdown cancels and completed countdown sends once only',async()=>{
  let sent=0;const app=mount({list:async()=>[],send:async()=>{sent++;return 1;}});await app.flush();app.press('SOS 알림 시작');app.tick();app.press('SOS 요청 취소');for(let i=0;i<12;i++)app.tick();assert.equal(sent,0);
  app.press('SOS 알림 시작');for(let i=0;i<10;i++)app.tick();await app.flush();assert.equal(sent,1);for(let i=0;i<10;i++)app.tick();assert.equal(sent,1);app.dispose();
+});
+
+test('compact home SOS keeps manual start/cancel and reveals history without sending',async()=>{
+ let sent=0;const app=mount({list:async()=>[],send:async()=>{sent++;return 1;}},patient,47,true);
+ await app.flush();assert.ok(app.nodes().some(n=>n.props?.label==='SOS 알림 시작'));
+ assert.equal(app.nodes().some(n=>n.props?.label==='SOS 내역 새로고침'),false);
+ app.press('SOS 기록과 안전 안내 보기');assert.ok(app.nodes().some(n=>n.props?.label==='SOS 내역 새로고침'));
+ app.press('SOS 알림 시작');app.tick();app.press('SOS 요청 취소');for(let i=0;i<60;i++)app.tick();assert.equal(sent,0);app.dispose();
 });
 test('background cancels send and polling; unmount ignores delayed result',async()=>{
  let sent=0,reads=0,release;const app=mount({list:async()=>{reads++;return [];},send:async()=>{sent++;return 1;}});await app.flush();app.press('SOS 알림 시작');app.background();for(let i=0;i<12;i++)app.tick();app.poll();assert.equal(sent,0);assert.equal(reads,1);app.dispose();
@@ -79,4 +124,20 @@ test('background cancels send and polling; unmount ignores delayed result',async
 test('guardian confirms receipt; failed refresh removes protected stale content',async()=>{
  let acknowledged=0,fail=false;const app=mount({list:async()=>{if(fail)throw Error('private');return [row()];},acknowledge:async()=>{acknowledged++;}},guardian);await app.flush();app.press('요청 확인 완료');await app.flush();assert.equal(acknowledged,1);
  fail=true;app.poll();await app.flush();assert.ok(!app.nodes().some(n=>n.props?.label==='요청 확인 완료'));app.dispose();
+});
+
+for(const actor of [patient,guardian]) test('SOS 3-second polling '+actor.role+' serializes reads and cleans up',async()=>{
+ let reads=0,names=0,resolveList,resolveNames;
+ const app=mount({list:()=>{reads++;return reads===1?new Promise(r=>resolveList=r):Promise.resolve([]);}},
+   actor,10,false,()=>{names++;return names===1?new Promise(r=>resolveNames=r):Promise.resolve([]);});
+ assert.deepEqual(app.pollDelays,[3000]);
+ app.poll();app.poll();assert.equal(reads,1);
+ resolveList([]);await app.flush();
+ app.poll();app.poll();assert.equal(reads,1,'name lookup remains inside the same read lock');
+ resolveNames([]);await app.flush();assert.equal(reads,2,'coalesced pending refresh');
+ app.press('SOS 내역 새로고침');await app.flush();assert.equal(reads,3);
+ const text=JSON.stringify(app.nodes());assert.ok(text.includes('3초'));assert.ok(!text.includes('실시간 채널 연결됨'));
+ app.background();app.poll();await app.flush();assert.equal(reads,3);
+ app.dispose();assert.deepEqual(app.pollDelays,[]);
+ app.poll();await app.flush();assert.equal(reads,3);assert.equal(app.late,0);
 });

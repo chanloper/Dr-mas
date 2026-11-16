@@ -4,8 +4,8 @@ import { currentPlaceLocation, PlaceLocationError } from '../../services/placeLo
 import type { Category, Place, PlaceQuery } from '../../services/placesClient';
 import { PlacesError } from '../../services/placesClient';
 
-export function usePlaceSearch() {
-  const [category, setCategory] = useState<Category>('hospital');
+export function usePlaceSearch(initialCategory: Category = 'hospital') {
+  const [category, setCategory] = useState<Category>(initialCategory);
   const [keyword, setKeyword] = useState('');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);

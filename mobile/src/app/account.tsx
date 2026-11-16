@@ -1,5 +1,6 @@
+import { careNameLabel } from '../services/careNames';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Switch, Text, View } from 'react-native';
+import { AppState, Pressable, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FeaturePage } from '../components/FeaturePage';
 import { FeatureModal } from '../components/FeatureModal';
@@ -10,6 +11,7 @@ import { getSupabaseClient } from '../services/supabase';
 import { useCareLinks } from '../features/care/useCareLinks';
 
 function AccountConnections({ user }: { user: AuthUser }) {
+  const router = useRouter();
   const links = useCareLinks({ id: user.id, role: user.role });
   const approved = links.rows.filter(row => row.status === 'approved');
   return <View style={{ marginVertical: 12, gap: 8 }}>
@@ -18,7 +20,7 @@ function AccountConnections({ user }: { user: AuthUser }) {
     {links.ready && <>
       <Text style={s.bodyStrong}>불러온 승인 연결: {approved.length}건</Text>
       {!approved.length && <Text style={s.caption}>이 목록에 승인된 연결이 없습니다.</Text>}
-      {approved.map((row, i) => <View key={row.id} style={s.listItem}><Text style={s.paragraph}>{user.role === 'patient' ? '보호자' : '환자'} {i + 1} · 계정 끝 {(user.role === 'patient' ? row.guardian_id : row.patient_id).slice(-4)}</Text><Text style={s.caption}>승인됨 · {row.approved_at ? new Date(row.approved_at).toLocaleDateString() : '승인일 확인 필요'}</Text></View>)}
+      {approved.map(row => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel="가족 연결 관리 열기" onPress={() => router.replace({ pathname: '/', params: { section: 'settings' } })} style={s.listItem}><Text style={s.paragraph}>{careNameLabel(row)} · 관계: {user.role === 'patient' ? '보호자' : '환자'}</Text><Text style={s.caption}>승인됨 · {row.approved_at ? new Date(row.approved_at).toLocaleDateString() : '승인일 확인 필요'}</Text><Text style={s.caption}>승인된 연결에서만 등록된 이름을 확인할 수 있어요. 선택하면 연결 관리로 이동합니다.</Text></Pressable>)}
     </>}
     {links.hasMore && <><Text style={s.caption}>아직 불러오지 않은 연결·이력이 있습니다.</Text><Action label="연결 더 불러오기" outline small disabled={links.busy || !links.ready} onPress={() => { void links.loadMore(); }} /></>}
     <Action label="연결 상태 새로고침" outline small disabled={links.busy} onPress={() => { void links.refresh(); }} />

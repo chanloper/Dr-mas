@@ -25,6 +25,7 @@ export default function appConfig({ config }: ConfigContext): ExpoConfig {
   if (projectId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) throw new Error('EAS projectId 형식을 확인하세요.');
   if (process.env.EAS_BUILD === 'true' && (!androidPackage || !projectId)) throw new Error('빌드 전 실제 Android 패키지명과 EAS 프로젝트를 확정하세요.');
   const plugins = [...(config.plugins ?? [])];
+  if (!plugins.some(p => (Array.isArray(p) ? p[0] : p) === './config/with-health-rationale.cjs')) plugins.push('./config/with-health-rationale.cjs');
   if (!plugins.some(p => (Array.isArray(p) ? p[0] : p) === 'expo-image-picker')) plugins.push(['expo-image-picker', {
     cameraPermission: '직접 선택한 처방전 촬영에 카메라를 사용합니다.',
     photosPermission: '직접 선택한 처방전 이미지를 미리보기에 사용합니다.',
@@ -50,6 +51,7 @@ export default function appConfig({ config }: ConfigContext): ExpoConfig {
     plugins,
     android: {
       ...config.android,
+      permissions: [...new Set([...(config.android?.permissions ?? []), 'android.permission.health.READ_HEART_RATE'])],
       ...(androidPackage ? { package: androidPackage } : {}),
       googleServicesFile,
     },

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import { withCareNames } from '../../services/careNames';
 import { getSupabaseClient } from '../../services/supabase';
 import { createCareLinkRepository, careLinkErrorMessage, CareLinkError, type CareActor, type CareLink, type CareCursor, type CarePage } from '../../services/careLinks';
 
@@ -22,6 +23,7 @@ export function useCareLinks(actor: CareActor) {
     setSupportsReconnect(false); setHasMore(false); setError(null); setNotice(null);
     try {
       const data = await createCareLinkRepository(getSupabaseClient()).page({ id: actor.id, role: actor.role });
+      data.rows = await withCareNames(getSupabaseClient(), { id: actor.id, role: actor.role }, data.rows);
       if (mounted.current && epoch.current === version) { applyPage(data); setReady(true); }
     } catch (e) { if (mounted.current && epoch.current === version) setError(careLinkErrorMessage(e)); }
     finally { if (mounted.current && epoch.current === version) { lock.current = false; setBusy(false); } }
@@ -32,6 +34,7 @@ export function useCareLinks(actor: CareActor) {
     lock.current = true; const version = epoch.current; setBusy(true); setError(null);
     try {
       const data = await createCareLinkRepository(getSupabaseClient()).page(actor, next.current);
+      data.rows = await withCareNames(getSupabaseClient(), { id: actor.id, role: actor.role }, data.rows);
       if (!mounted.current || epoch.current !== version) return;
       if (data.supportsReconnect !== supportsReconnect) throw new CareLinkError('RESPONSE', '서버의 연결 기능이 변경되었습니다. 목록을 새로고침해 주세요.');
       const all = new Map(loaded.current.map(row => [row.id, row]));
@@ -59,6 +62,7 @@ export function useCareLinks(actor: CareActor) {
       if (action === 'request') await repo.request(actor, id); else await repo.decide(actor, id, action);
       if (!mounted.current || epoch.current !== version) return false;
       const data = await repo.page(actor);
+      data.rows = await withCareNames(getSupabaseClient(), { id: actor.id, role: actor.role }, data.rows);
       if (!mounted.current || epoch.current !== version) return false;
       applyPage(data); setNotice(action === 'request' ? '연결 요청을 보냈습니다. 환자의 승인을 기다려 주세요.' : action === 'approve' ? '연결을 승인했습니다.' : action === 'reject' ? '연결 요청을 거절했습니다.' : action === 'cancel' ? '연결 요청을 취소했습니다.' : '연결을 해제했습니다.');
       return true;

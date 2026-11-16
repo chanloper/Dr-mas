@@ -34,9 +34,9 @@ export function useCloudMedications(user: AuthUser) {
     try {
       const repository = createMedicationRepository(getSupabaseClient());
       if (action === 'remove') {
-        await repository.remove(user.id, id);
+        const row = await repository.remove(user.id, id);
         if (epoch !== generation.current) return false;
-        setData(old => old?.owner === user.id ? { ...old, schedules: old.schedules.filter(row => row.id !== id) } : old);
+        setData(old => old?.owner === user.id ? { ...old, schedules: old.schedules.map(schedule => schedule.id === id ? row : schedule) } : old);
       } else if (action === 'mark') {
         const row = await repository.mark(user.id, id, day, value as boolean);
         if (epoch !== generation.current) return false;

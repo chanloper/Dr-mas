@@ -72,14 +72,15 @@ export function createMedicationRepository(client: SupabaseClient) {
       const { data, error } = await client.from('medications').update({ active }).eq('id', id).eq('patient_id', patient).select(fields).single(); check(error);
       return schedule(data, patient);
     },
-    async remove(patient: string, id: string): Promise<void> {
+    async remove(patient: string, id: string): Promise<CloudSchedule> {
       validateId(id); await actor(patient);
-      // The existing FK rejects deletion when any historical records exist.
-      // Never delete records first or weaken that database protection.
-      const { data, error } = await client.from('medications').delete().eq('id', id).eq('patient_id', patient).select('id').single();
-      if (error?.code === '23503') throw new MedicationError('INPUT', '복약 기록이 있는 일정은 삭제할 수 없습니다. 일정 보관을 이용해 주세요.');
+      // Remove from active schedules without breaking historical FK references.
+      // This intentionally does not permanently erase the schedule or records.
+      const { data, error } = await client.from('medications').update({ active: false }).eq('id', id).eq('patient_id', patient).select(fields).single();
       check(error);
-      if (data?.id !== id) throw new MedicationError('RESPONSE', '일정 삭제 결과를 확인하지 못했습니다. 다시 불러와 확인해 주세요.');
+      const removed = schedule(data, patient);
+      if (removed.id !== id || removed.active) throw new MedicationError('RESPONSE', '일정 삭제 결과를 확인하지 못했습니다. 다시 불러와 확인해 주세요.');
+      return removed;
     },
     async mark(patient: string, id: string, day: string, taken: boolean): Promise<CloudRecord> {
       validateId(id); validateDay(day); if (typeof taken !== 'boolean') invalid(); await actor(patient);

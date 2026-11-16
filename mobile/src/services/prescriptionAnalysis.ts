@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase';
+import { DUR_OPERATION_TIMEOUT_MS } from './supabaseRequestTimeout';
 import { validateDurDrugs, validateDurResult, validateDurSearch, validateDurSearchResult, type DurDrug } from './durContract';
 
 const messages: Record<string, string> = {
@@ -15,14 +16,15 @@ export class DurError extends Error {
   constructor(public code: string) { super(messages[code] ?? '병용금기 정보를 조회하지 못했습니다. 연결·로그인·서버 설정을 확인해 주세요.'); }
 }
 
-// Explicit opt-in after deployment verification; no automatic probe or image upload.
-export function durConfigured(): boolean { return process.env.EXPO_PUBLIC_DUR_ENABLED === '1'; }
+// The server owns activation, approval and quota gates. Opening the UI never probes
+// a provider. An explicit client kill switch remains available.
+export function durConfigured(): boolean { return process.env.EXPO_PUBLIC_DUR_ENABLED !== '0'; }
 async function invokeDur(body: object, signal: AbortSignal): Promise<unknown> {
   if (!durConfigured()) throw Error('병용금기 조회 서버가 아직 연결되지 않았습니다.');
   const client = getSupabaseClient();
   const controller = new AbortController(); const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
-  const timer = setTimeout(abort, 25000);
+  const timer = setTimeout(abort, DUR_OPERATION_TIMEOUT_MS);
   try {
     const { data: auth, error: authError } = await client.auth.getUser();
     if (authError || !auth.user || auth.user.is_anonymous) throw new DurError('AUTH_REQUIRED');

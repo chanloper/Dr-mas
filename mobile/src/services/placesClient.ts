@@ -8,6 +8,7 @@ const messages: Record<string, string> = {
   NOT_CONFIGURED: '검색 서버의 공개 호출 보호 설정이 준비되지 않았습니다.', LIMITER_UNAVAILABLE: '검색 요청 보호 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
   RATE_LIMITED: '검색 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.', PROVIDER_LIMITED: '검색 제공자의 사용 한도에 도달했습니다. 나중에 다시 시도해 주세요.',
   NETWORK: '검색 서버에 연결하지 못했습니다. 인터넷 연결과 서버 준비 상태를 확인해 주세요.',
+  WEB_NETWORK: '검색 서버에 연결하지 못했어요. 인터넷 연결 또는 이 웹 주소의 접근 허용 설정을 확인해야 해요.',
   INVALID_RESPONSE: '검색 결과를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
   UNAVAILABLE: '검색 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
   ORIGIN_DENIED: '현재 웹 주소에서는 검색 서비스를 이용할 수 없습니다.',
@@ -45,7 +46,9 @@ export function createPlaceClient(endpoint: string | undefined, fetcher: typeof 
       try { return validateResult(data); } catch { throw new PlacesError('INVALID_RESPONSE'); }
     } catch (e) {
       if (e instanceof PlacesError) throw e;
-      throw new PlacesError('NETWORK');
+      // Browsers hide blocked CORS responses as a network error. Do not claim
+      // to know which one failed; keep native error behavior unchanged.
+      throw new PlacesError(typeof window !== 'undefined' ? 'WEB_NETWORK' : 'NETWORK');
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   };
 }

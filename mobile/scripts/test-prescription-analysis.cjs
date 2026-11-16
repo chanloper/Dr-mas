@@ -1,4 +1,5 @@
 // Synthetic data and injected transport only: never reads .env or calls a provider.
+/* global __dirname, Buffer */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -26,6 +27,30 @@ const rows = [
   { ITEM_NAME: drugs[1].name, ITEM_SEQ: drugs[1].itemSeq, MIXTURE_ITEM_SEQ: drugs[0].itemSeq, PROHBT_CONTENT: '합성 시험용 병용금기 내용' },
 ];
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+test('DUR pagination finds exact selected pair after page one and admits every page through existing limiter', async () => {
+  const providerCalls = []; let admissions = 0;
+  const env = { DUR_ENABLED: 'true', MFDS_DUR_SERVICE_KEY: 'synthetic', SUPABASE_URL: 'https://fixture.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fixture', UPSTASH_REDIS_REST_URL: 'https://fixture.upstash.io', UPSTASH_REDIS_REST_TOKEN: 'synthetic' };
+  const handler = loader()('supabase/functions/check-dur/handler.ts').createHandler({ env: k => env[k], fetch: async url => {
+    const target = new URL(url);
+    if (target.hostname.endsWith('supabase.co')) return json({ id: 'synthetic-user' });
+    if (target.hostname.endsWith('upstash.io')) { admissions++; return json({ result: 1 }); }
+    providerCalls.push(target);
+    const own = drugs.find(d => d.itemSeq === target.searchParams.get('itemSeq'));
+    assert.ok(own);
+    const other = drugs.find(d => d !== own);
+    const page = Number(target.searchParams.get('pageNo'));
+    const item = { ITEM_SEQ: own.itemSeq, ITEM_NAME: own.name, MIXTURE_ITEM_SEQ: page === 2 ? other.itemSeq : '999000099', PROHBT_CONTENT: page === 2 ? '합성 정확한 조합 원문' : '합성 기타 원문' };
+    return json({ header: { resultCode: '00' }, body: { totalCount: 101, items: Array.from({ length: page === 1 ? 100 : 1 }, () => item) } });
+  } });
+  const response = await handler(new Request('https://fixture.supabase.co/functions/v1/check-dur', { method: 'POST', headers: { Authorization: 'Bearer synthetic', 'Content-Type': 'application/json' }, body: JSON.stringify({ drugs }) }));
+  assert.equal(response.status, 200);
+  const result = contract.validateDurResult(await response.json());
+  assert.equal(result.warnings.length, 1);
+  assert.equal(result.warnings[0].content, '합성 정확한 조합 원문');
+  assert.equal(result.drugs.every(d => d.identityConfirmed), true);
+  assert.equal(result.drugs[1].truncated, true); // Exact pair found before unused later pages.
+  assert.equal(admissions, 3); assert.equal(providerCalls.length, 3);
+});
 function fixture(options = {}) {
   const calls = [];
   const env = { DUR_ENABLED: 'true', MFDS_DUR_SERVICE_KEY: 'synthetic%2Bkey%3D', SUPABASE_URL: 'https://fixture.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fixture', DUR_ALLOWED_ORIGINS: 'https://web.invalid', UPSTASH_REDIS_REST_URL: 'https://fixture.upstash.io', UPSTASH_REDIS_REST_TOKEN: 'synthetic-redis', ...options.env };
@@ -94,10 +119,24 @@ test('client uses existing verified JWT; sends medicine identifiers only', async
   await api.checkPrescriptionDur(drugs, new AbortController().signal);
   assert.equal(sent.name, 'check-dur'); assert.equal(sent.options.headers.Authorization, 'Bearer synthetic-user-token'); assert.equal(Object.keys(sent.options.body).join(','), 'drugs');
 });
-test('client defaults disconnected and rejects invalid response', async () => {
-  const closed = loader({ './supabase': { getSupabaseClient: () => { throw Error('must not initialize'); } } })('mobile/src/services/prescriptionAnalysis.ts');
+test('explicit client kill switch prevents requests and invalid responses stay rejected', async () => {
+  const closed = loader({ './supabase': { getSupabaseClient: () => { throw Error('must not initialize'); } } }, { EXPO_PUBLIC_DUR_ENABLED: '0' })('mobile/src/services/prescriptionAnalysis.ts');
   await assert.rejects(closed.checkPrescriptionDur(drugs, new AbortController().signal), /아직 연결/);
   assert.throws(() => contract.validateDurResult({ status: 'safe', drugs: [], warnings: [] }));
+});
+
+test('public DUR entry opens a transient official-product selection panel', () => {
+  const entry = fs.readFileSync(path.join(root, 'mobile/src/components/PublicMedicineInfo.tsx'), 'utf8');
+  const panel = entry;
+  assert.match(entry, /setDurOpen\(true\)/);
+  assert.match(entry, /durOpen && <DurPanel/);
+  assert.match(panel, /checkPrescriptionDur\(JSON\.parse\(selectionKey\)/);
+  assert.match(panel, /if \(!consent \|\| JSON\.parse\(selectionKey\)\.length < 2\) return/);
+  assert.match(panel, /active\.current\?\.abort\(\)/);
+  assert.match(panel, /result\.warnings\.map/);
+  assert.match(panel, /DUR_SOURCE_URL/);
+  const available = loader({ './supabase': {} })('mobile/src/services/prescriptionAnalysis.ts');
+  assert.equal(available.durConfigured(), true);
 });
 test('shared quota counts each provider lookup with separate DUR buckets; exhausted limiter blocks provider', async () => {
   const f = fixture(); await f.handler(f.request());
@@ -158,6 +197,7 @@ function searchUI(service) {
   const react = {
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value; }]; },
     useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial }; },
+    useCallback(fn) { cursor++; return fn; },
     useEffect(effect) { const i = cursor++; if (!(i in slots)) { slots[i] = true; effects.push(() => cleanups.push(effect())); } },
   };
   const jsx = (type, props) => ({ type, props });

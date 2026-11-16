@@ -40,7 +40,7 @@ export async function previewRegistration(source:Repository,target:Repository,bi
   attribution:{publisher:d.publisher,...attribution,updatedAt:d.updatedAt},sourcePermissionUnchanged:d.rights.permission};
 }
 export type RegistrationPlan=Awaited<ReturnType<typeof previewRegistration>>;
-export async function executeRegistration(source:Repository,target:Repository,plan:RegistrationPlan,approval:{confirmed:boolean;reviewer:string;reviewedAt:string}){
+export async function executeRegistration(source:Repository,target:Repository,plan:RegistrationPlan,approval:{confirmed:boolean;reviewer:string;reviewedAt:string;testOnly?:boolean;kdcaUse?:import('./kdca-use.js').KdcaUseReview}){
  if(approval.confirmed!==true||!approval.reviewer?.trim()||approval.reviewer.length>100||['APPROVED_REVIEWER_ROLE','required-at-execution','DRY_RUN_NOT_APPROVED'].includes(approval.reviewer)||!Number.isFinite(Date.parse(approval.reviewedAt)))throw Error('REGISTRATION_FINAL_APPROVAL_REQUIRED');
  await separateStores(source,target);
  const sourceState=await source.read();const d=checkedSource(sourceState,plan.target);
@@ -53,6 +53,8 @@ export async function executeRegistration(source:Repository,target:Repository,pl
   const draft=structuredClone(state);
   const isolated:Repository={read:async()=>structuredClone(draft),transaction:async fn=>fn(draft)};
   const document=structuredClone(d);
+  if(approval.kdcaUse)document.rights.kdcaUse=structuredClone(approval.kdcaUse);
+  if(approval.testOnly===true)document.rights.permission='test-only';
   document.rights.scopes={};
   for(const scope of ['local_search','quotation','external_embedding','external_generation'] as const)document.rights.scopes[scope]={decision:scope==='local_search'||scope==='quotation'?'permitted':'denied',scope,evidenceUrl:attribution.termsUrl,
    reviewedAt:approval.reviewedAt,reviewer:approval.reviewer,documentId:d.id,documentVersion:d.version,contentHash:d.contentHash,purpose:registrationPurpose};

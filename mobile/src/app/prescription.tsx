@@ -6,10 +6,11 @@ import { PrescriptionImageError, type PrescriptionImage, type PrescriptionImageS
 import { checkPrescriptionDur, durConfigured } from '../services/prescriptionAnalysis';
 import { DUR_SOURCE_URL, parseDurDraft, type DurCandidate, type DurDrug, type DurResult } from '../services/durContract';
 import { DurMedicineSearch } from '../components/DurMedicineSearch';
+import { PublicMedicineInfo } from '../components/PublicMedicineInfo';
 import { FeaturePage } from '../components/FeaturePage';
 import { FeatureModal } from '../components/FeatureModal';
 import { FeatureTabs } from '../components/FeatureTabs';
-import { Action, Chip, Field, Panel, StatusMessage, TitleRow, s } from '../components/ui';
+import { Action, C, Chip, Field, Panel, StatusMessage, TitleRow, s } from '../components/ui';
 
 function PrescriptionContent() {
   const [step, setStep] = useState(0), [source, setSource] = useState<'camera' | 'album' | null>(null);
@@ -87,7 +88,8 @@ function PrescriptionContent() {
     <FeatureTabs labels={['1. 처방전 촬영', '2. 약품명 확인', '3. DUR 결과']} selected={step} onSelect={setStep} />
     {step === 0 ? <Panel>
       <TitleRow title="처방전 이미지" accessory={image ? '선택됨' : busy ? '선택 중' : '미선택'} />
-      <View style={{ minHeight: 180, borderWidth: 1, borderStyle: 'dashed', borderColor: '#CBD5E1', borderRadius: 14, justifyContent: 'center', alignItems: 'center', padding: 22, gap: 12 }}>
+      <Text style={[s.sectionTitle,{marginBottom:12,color:C.blue}]}>처방전이나 약봉투를{ '\n' }한눈에 보이게 선택해 주세요</Text>
+      <View style={{ minHeight: 220, borderWidth: 2, borderStyle: 'dashed', borderColor: C.blue,backgroundColor:C.pale, borderRadius: 16, justifyContent: 'center', alignItems: 'center', padding: 22, gap: 12 }}>
         {image ? <Image source={{ uri: image.uri }} style={{ width: '100%', height: 280 }} contentFit="contain" cachePolicy="none" onError={() => { if (current.current === image) { clearImage(); setError('이미지를 표시하지 못했습니다. 다른 이미지로 선택해 주세요.'); } }} /> : <><Text style={{ fontSize: 36 }}>▤</Text><Text style={s.bodyStrong}>처방전 미리보기</Text><Text style={[s.caption, { textAlign: 'center' }]}>직접 선택한 이미지 한 장만 표시합니다. 자동으로 개인정보를 가리지 않습니다.</Text></>}
       </View>
       <View style={{ marginTop: 16, gap: 10 }}><Action label={image ? '다른 이미지 선택' : '처방전 이미지 선택'} disabled={busy} onPress={() => setChoice(true)} />
@@ -158,5 +160,7 @@ function PrescriptionContent() {
   </>;
 }
 export default function PrescriptionScreen() {
-  return <FeaturePage title="처방전 분석" subtitle="촬영 준비부터 약품명 확인, DUR 결과까지 단계별로 확인하세요." patientOnly>{user => <PrescriptionContent key={user.id} />}</FeaturePage>;
+  return <FeaturePage title="처방전·의약품 정보" subtitle="공개 의약품 정보는 환자와 보호자 모두 확인할 수 있습니다.">{user => user.role === 'patient'
+    ? <><PublicMedicineInfo key={`public:${user.id}`} /><View style={{ marginTop: 18 }}><PrescriptionContent key={user.id} /></View></>
+    : <PublicMedicineInfo key={user.id} />}</FeaturePage>;
 }

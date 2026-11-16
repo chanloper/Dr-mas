@@ -9,7 +9,51 @@ const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222
 const patient={id:A,role:'patient'},guardian={id:G,role:'guardian'};
 const row=(status='pending')=>({id:L,patient_id:A,guardian_id:G,requested_by:G,status,approved_by:status==='approved'?A:null,approved_at:status==='approved'?'2026-11-03T00:00:00Z':null,revoked_at:status==='revoked'?'2026-11-03T01:00:00Z':null,created_at:'2026-11-03T00:00:00Z'});
 const compile=p=>ts.transpileModule(fs.readFileSync(p,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
+test('home keys remain distinct and account-scoped; guardian manage button navigates',()=>{
+ const tabs=[];let id=A;
+ const box={exports:{},require:name=>{if(name.endsWith('/careNames'))return {careNameLabel:row=>row.status==='approved'&&row.display_name!==undefined?(row.display_name?.trim()||'이름 미등록'):'이름 확인 불가',withCareNames:async(_c,_a,rows)=>rows,readApprovedCareNames:async()=>[]};if(name.endsWith('/sosRealtime'))return {watchSos:()=>()=>{}};
+  if(name==='../services/registeredHealthNews')return {loadRegisteredHealthNews:async()=>[]};if(name==='react/jsx-runtime')return require(name);
+  if(name==='react')return {...React,useState:v=>[typeof v==='function'?v():v,()=>{}],useEffect(){}};
+  if(name==='react-native')return {Pressable:'Pressable',Text:'Text',View:'View',Animated:{View:'AnimatedView',Value:class{}}};
+  if(name==='expo-router')return {useRouter:()=>({push:()=>{}})};
+  if(name==='../features/app/context')return {useDrMAS:()=>({user:{id},meds:[],takenCount:0,setTab:t=>tabs.push(t)})};
+  if(name==='../components/ui')return {Action:'Action',C:{},s:{},SummaryTile:'SummaryTile',TitleRow:'TitleRow'};
+  if(name==='../components/DashboardSummaries')return {PatientMedicationSummary:'PatientMedicationSummary',ConnectedFamilySummary:'ConnectedFamilySummary'};
+  if(name==='../components/SosPanel')return {SosPanel:'SosPanel'};
+  if(name==='../components/HealthNewsCarousel')return {HealthNewsCarousel:'HealthNewsCarousel'};
+  if(name==='../components/MedicationStatus')return {MedicationStatus:'MedicationStatus'};
+  throw Error(name);
+ }};
+ const nodes=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(nodes):[n,...nodes(n.props?.children)];
+ vm.runInNewContext(compile('src/screens/PatientHome.tsx'),box);
+ const keys=()=>nodes(box.exports.default()).filter(n=>['PatientMedicationSummary','SosPanel'].includes(n.type)).map(n=>n.key);
+ const first=keys();assert.equal(new Set(first).size,2);assert.ok(first.every(k=>k.includes(A)));
+ id=B;assert.ok(keys().every(k=>k.includes(B)&&!first.includes(k)));
+ const guardianBox={exports:{},require:box.require};
+ vm.runInNewContext(compile('src/screens/GuardianHome.tsx'),guardianBox);
+ const button=nodes(guardianBox.exports.default()).find(n=>n.props?.label==='가족 연결 관리');button.props.onPress();assert.deepEqual(tabs,['settings']);
+});
 function service(){const s={exports:{}};vm.runInNewContext(compile('src/services/careLinks.ts'),s);return s.exports;}
+test('family card opens management, hides identifiers, and separates loading/error/empty',()=>{
+ const model={rows:[row('approved')],ready:true,busy:false,error:null};let opened=0;
+ const box={exports:{},require:name=>{if(name.endsWith('/careNames'))return {careNameLabel:row=>row.status==='approved'&&row.display_name!==undefined?(row.display_name?.trim()||'이름 미등록'):'이름 확인 불가',withCareNames:async(_c,_a,rows)=>rows,readApprovedCareNames:async()=>[]};if(name.endsWith('/sosRealtime'))return {watchSos:()=>()=>{}};
+  if(name==='react/jsx-runtime')return require(name);
+  if(name==='react-native')return {Pressable:'Pressable',Text:'Text',View:'View'};
+  if(name==='../features/care/useCareLinks')return {useCareLinks:()=>model};
+  if(name==='../features/medications/useCloudMedications')return {};
+  if(name==='./ui')return {Panel:'Panel',StatusMessage:'StatusMessage',Chip:'Chip',Action:'Action',s:{}};
+  throw Error(name);
+ }};vm.runInNewContext(compile('src/components/DashboardSummaries.tsx'),box);
+ const nodes=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(nodes):[n,...nodes(n.props?.children)];
+ const render=()=>nodes(box.exports.ConnectedFamilySummary({guardianId:G,onManage:()=>opened++,onMedication:()=>{}}));
+ let result=render();result.find(n=>n.type==='Pressable').props.onPress();assert.equal(opened,1);
+ const text=result.filter(n=>n.type==='Text').map(n=>JSON.stringify(n.props.children)).join(' ');
+ assert.ok(text.includes('이름 확인 불가'));assert.ok(!text.includes(A)&&!text.includes(G));
+ assert.ok(result.some(n=>n.props?.text==='승인됨'));
+ model.rows=[];assert.ok(render().some(n=>n.props?.kind==='empty'));
+ model.ready=false;model.busy=true;assert.ok(render().some(n=>n.props?.kind==='loading'));assert.ok(!render().some(n=>n.props?.kind==='empty'));
+ model.busy=false;model.error='연결 확인 실패';assert.ok(render().some(n=>n.props?.kind==='error'));
+});
 function fixture(actor=patient){
  const api=service(),calls=[],queries=[];let rows=[row()],authError=null,authId=actor.id,rpcError=null,rpcData=L,queryError=null,unfiltered=false,extended=false,serverCap=Infinity;
  const client={auth:{getUser:async()=>({data:{user:authId?{id:authId}:null},error:authError})},
@@ -81,7 +125,7 @@ test('local migration contract keeps pending guardians out of medication reads a
 });
 function panel(actor,links){
  let slots=[],cursor=0,calls=[];const model={rows:links,ready:true,busy:false,error:null,notice:null,supportsReconnect:false,hasMore:false,loadMore:async()=>{},refresh:async()=>{},perform:async(...args)=>{calls.push(args);return true;}};
- const sandbox={exports:{},require:name=>{
+ const sandbox={exports:{},require:name=>{if(name.endsWith('/careNames'))return {careNameLabel:row=>row.status==='approved'&&row.display_name!==undefined?(row.display_name?.trim()||'이름 미등록'):'이름 확인 불가',withCareNames:async(_c,_a,rows)=>rows,readApprovedCareNames:async()=>[]};if(name.endsWith('/sosRealtime'))return {watchSos:()=>()=>{}};
   if(name==='react/jsx-runtime')return require(name);
   if(name==='react')return {...React,useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=initial;return [slots[i],v=>{slots[i]=v;}];}};
   if(name==='react-native')return {Text:'Text',TextInput:'TextInput',View:'View'};
@@ -117,7 +161,7 @@ function mountHook(repo,initialActor=patient){
   useCallback(fn,deps){const i=cursor++,old=slots[i];if(!old||deps.some((v,j)=>v!==old.deps[j]))slots[i]={fn,deps};return slots[i].fn;},
   useEffect(fn,deps){const i=cursor++,old=slots[i];if(!old||deps.some((v,j)=>v!==old.deps[j]))effects.push(()=>{old?.cleanup?.();slots[i]={deps,cleanup:fn()};});},
  };
- const api=service();const box={exports:{},require:name=>{
+ const api=service();const box={exports:{},require:name=>{if(name.endsWith('/careNames'))return {careNameLabel:row=>row.status==='approved'&&row.display_name!==undefined?(row.display_name?.trim()||'이름 미등록'):'이름 확인 불가',withCareNames:async(_c,_a,rows)=>rows,readApprovedCareNames:async()=>[]};if(name.endsWith('/sosRealtime'))return {watchSos:()=>()=>{}};
   if(name==='react')return hooks;
   if(name==='react-native')return {AppState:{addEventListener:(_,fn)=>{listeners.add(fn);return {remove:()=>listeners.delete(fn)};}}};
   if(name==='../../services/supabase')return {getSupabaseClient:()=>({})};
@@ -154,7 +198,7 @@ test('an initial refresh queued before an account switch cannot read the old act
 });
 test('Services connection entry opens Settings while the existing places entry is unchanged',()=>{
  const tabs=[],routes=[],alerts=[];
- const box={exports:{},require:name=>{
+ const box={exports:{},require:name=>{if(name.endsWith('/careNames'))return {careNameLabel:row=>row.status==='approved'&&row.display_name!==undefined?(row.display_name?.trim()||'이름 미등록'):'이름 확인 불가',withCareNames:async(_c,_a,rows)=>rows,readApprovedCareNames:async()=>[]};if(name.endsWith('/sosRealtime'))return {watchSos:()=>()=>{}};
   if(name==='react/jsx-runtime')return require(name);if(name==='react')return React;
   if(name==='expo-router')return {useRouter:()=>({push:path=>routes.push(path)})};
   if(name==='react-native')return {Alert:{alert:(...args)=>alerts.push(args)},Pressable:'Pressable',Text:'Text',View:'View'};

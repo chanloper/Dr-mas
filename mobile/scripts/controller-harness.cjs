@@ -49,6 +49,12 @@ function createHarness({ auth, storage, alerts = [], DateImpl = Date, rag = { se
         if (name === '../../services/localMedications') return local.exports;
         if (name === '../../services/auth') return auth;
         if (name === '../../services/rag') return rag;
+        if (name === '../../services/emergencyGuidance') { const m={exports:{}};vm.runInNewContext(compile('services/emergencyGuidance.ts'),m);return m.exports; }
+        if (name === '../../services/consultationFlow') { const m={exports:{}};vm.runInNewContext(compile('services/consultationFlow.ts'),m);return m.exports; }
+        if (name === './useConsultationHistory') {
+          const history={exports:{}};vm.runInNewContext(compile('services/consultationHistory.ts'),history);
+          const hook={exports:{},require:n=>n==='react'?hooks:history.exports};vm.runInNewContext(compile('features/app/useConsultationHistory.ts'),hook);return hook.exports;
+        }
         throw Error(`unexpected import: ${name}`);
       },
       setTimeout: callback => { const id = {}; timers.set(id, callback); return id; },

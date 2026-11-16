@@ -5,6 +5,7 @@ export type CareLink = {
   status: 'pending' | 'approved' | 'revoked'; approved_by: string | null;
   approved_at: string | null; revoked_at: string | null; created_at: string;
   closure_reason?: 'rejected' | 'cancelled' | 'revoked' | null;
+  display_name?: string | null;
 };
 export type CareCursor = { createdAt: string; id: string };
 export type CarePage = { rows: CareLink[]; next: CareCursor | null; supportsReconnect: boolean };

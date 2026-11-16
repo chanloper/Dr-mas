@@ -62,6 +62,7 @@ test('Settings exposes RLS entry only under the existing dev gate; clicking rech
   if(name==='react-native')return {Pressable:'Pressable',Text:'Text',View:'View'};
   if(name==='../features/app/context')return {useDrMAS:()=>({roleLabel:'합성',user:null,sosDelay:10,setSosDelay(){},signOut(){}})};
   if(name==='../components/ui')return {Action:'Action',Chip:'Chip',Panel:'Panel',TitleRow:'TitleRow',C:{},s:{}};
+  if(name==='../components/SosDelaySlider')return {SosDelaySlider:'SosDelaySlider'};
   if(name==='../components/CareLinksPanel')return {CareLinksPanel:'CareLinksPanel'};
   if(name==='../dev/DevNotificationsPanel')return {DevNotificationsPanel:'DevNotificationsPanel'};
   if(name==='../dev/rlsDiagnostics')return f.api;

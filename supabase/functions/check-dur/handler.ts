@@ -71,7 +71,8 @@ export function createHandler(deps: Deps) {
     const controller = new AbortController(); const abort = () => controller.abort();
     request.signal.addEventListener('abort', abort, { once: true });
     if (request.signal.aborted) abort();
-    const timer = setTimeout(abort, 20000);
+    // Finish before the DUR-only 45s client transport / 50s operation deadlines.
+    const timer = setTimeout(abort, 40000);
     const bounded = async <T>(work: Promise<T>): Promise<T> => {
       if (controller.signal.aborted) throw new Failure('TIMEOUT', 504);
       return new Promise<T>((resolve, reject) => {
@@ -126,30 +127,74 @@ export function createHandler(deps: Deps) {
       } catch { throw new Failure('NOT_CONFIGURED'); }
       const caps = [cap(deps.env('DUR_MAX_PER_MINUTE'), 30, 60), cap(deps.env('DUR_MAX_PER_DAY'), 500, 1000), cap(deps.env('DUR_MAX_PER_MONTH'), 5000, 10000)];
       const result: DurResult = { status: 'reference_only', drugs: [], warnings: [], notices: [], checkedAt: new Date().toISOString() };
-      const pages: Row[][] = [];
-      for (const drug of drugs) {
+      const collected = drugs.map(() => ({ rows: [] as Row[], total: null as number | null, complete: false }));
+      const validReason = (v: unknown): v is string => typeof v === 'string' && !!v.trim() && v.length <= 1500 && !/[\u0000-\u001f<>]/u.test(v);
+      const identifier = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(value);
+      const reasonFor = (row: Row): string => validReason(row.PROHBT_CONTENT) ? row.PROHBT_CONTENT :
+        row.PROHBT_CONTENT == null || typeof row.PROHBT_CONTENT === 'string' && !row.PROHBT_CONTENT.trim()
+          ? '공식 병용금기 등록 정보입니다. API에서 상세 금기 사유를 제공하지 않았습니다.'
+          : '공식 병용금기 등록 정보입니다. 상세 금기 사유를 이 화면에 표시할 수 없어 공식 출처에서 확인해야 합니다.';
+      const matchesCounterpart = (row: Row, index: number): boolean => {
+        if (row.MIXTURE_ITEM_SEQ === drugs[index]!.itemSeq) return true;
+        // Official DUR identifiers, not ingredient names. Require the complete
+        // code and formulation to occur on the other selected product itself.
+        // Never split composite codes or infer missing formulation information.
+        return identifier(row.MIXTURE_INGR_CODE) && identifier(row.MIXTURE_FORM_CODE) &&
+          collected[index]!.rows.some(other => other.ITEM_SEQ === drugs[index]!.itemSeq && other.ITEM_NAME === drugs[index]!.name &&
+            other.INGR_CODE === row.MIXTURE_INGR_CODE && other.FORM_CODE === row.MIXTURE_FORM_CODE);
+      };
+      const identified = (index: number) => !!drugs[index]!.itemSeq && collected[index]!.rows.some(r => r.ITEM_SEQ === drugs[index]!.itemSeq && r.ITEM_NAME === drugs[index]!.name);
+      const allPairsFound = () => drugs.length >= 2 && drugs.every((_, i) => identified(i)) && drugs.every((first, i) => drugs.every((second, j) => j <= i ||
+        collected[i]!.rows.some(r => r.ITEM_SEQ === first.itemSeq && r.ITEM_NAME === first.name && matchesCounterpart(r, j)) ||
+        collected[j]!.rows.some(r => r.ITEM_SEQ === second.itemSeq && r.ITEM_NAME === second.name && matchesCounterpart(r, i))));
+      // Read page one of every selected product before spending the budget on
+      // page two. Never infer a pair from product/ingredient name similarity.
+      try {
+      pagination: for (let pageNo = search?.page ?? 1; pageNo <= (search ? search.page : 10); pageNo++) {
+      for (let index = 0; index < drugs.length; index++) {
+        const drug = drugs[index]!, state = collected[index]!;
+        if (state.complete) continue;
         const time = Date.now(), iso = new Date(time).toISOString();
         let admission;
         try {
           admission = await fetchJson(redis.origin, { method: 'POST', headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(['EVAL', LIMIT_SCRIPT, '3', `drmas:dur:minute:${Math.floor(time / 60000)}`, `drmas:dur:day:${iso.slice(0, 10)}`, `drmas:dur:month:${iso.slice(0, 7)}`, ...caps.map(String), '120', '172800', '3456000']) }, 4096) as { result?: unknown; error?: unknown };
           if (!admission || admission.error || admission.result !== 0 && admission.result !== 1) throw Error();
-        } catch { throw new Failure('LIMITER_UNAVAILABLE'); }
+        } catch (error) { if (error instanceof Failure && error.code === 'TIMEOUT') throw error; throw new Failure('LIMITER_UNAVAILABLE'); }
         if (admission.result === 0) { headers['Retry-After'] = '60'; throw new Failure('RATE_LIMITED', 429); }
         const url = new URL('https://apis.data.go.kr/1471000/DURPrdlstInfoService03/getUsjntTabooInfoList03');
         // Portal may supply an encoded key. Decode exactly once before URLSearchParams.
         let rawKey: string; try { rawKey = decodeURIComponent(secret); } catch { throw new Failure('NOT_CONFIGURED'); }
         url.searchParams.set('serviceKey', rawKey); url.searchParams.set('type', 'json');
-        url.searchParams.set('pageNo', String(search?.page ?? 1)); url.searchParams.set('numOfRows', '100');
+        url.searchParams.set('pageNo', String(pageNo)); url.searchParams.set('numOfRows', '100');
         url.searchParams.set('itemName', drug.name);
+        if (!search && drug.itemSeq) url.searchParams.set('itemSeq', drug.itemSeq);
         const page = readPage(await fetchJson(url, {}));
         if (search) {
           const remaining = page.total > search.page * 100;
           return reply({ status: 'reference_only', query: search.query, page: search.page, candidates: candidatesFrom(page.rows, search.query), hasMore: remaining && search.page < 3, truncated: remaining, checkedAt: result.checkedAt });
         }
-        const rows = page.rows.filter(r => r.ITEM_NAME === drug.name && typeof r.ITEM_SEQ === 'string' && /^\d{9}$/.test(r.ITEM_SEQ));
+        if (state.total === null) state.total = page.total;
+        else if (state.total !== page.total) throw new Failure('PROVIDER_RESPONSE_INVALID', 502);
+        state.rows.push(...page.rows);
+        state.complete = state.rows.length >= state.total;
+        // A short page with an outstanding total is an incomplete result, not
+        // permission to declare the remaining combinations safe.
+        if (!state.complete && page.rows.length < 100) break pagination;
+        if (allPairsFound() || collected.every(s => s.complete)) break pagination;
+      }
+      }
+      } catch (error) {
+        // Preserve already validated pages on the server deadline only. Caller
+        // cancellation, rate denial and upstream errors must not become success.
+        if (!(error instanceof Failure) || error.code !== 'TIMEOUT' || request.signal.aborted || !collected.some(s => s.rows.length)) throw error;
+      }
+      const pages: Row[][] = [];
+      for (let index = 0; index < drugs.length; index++) {
+        const drug = drugs[index]!, state = collected[index]!;
+        const rows = state.rows.filter(r => r.ITEM_NAME === drug.name && typeof r.ITEM_SEQ === 'string' && /^\d{9}$/.test(r.ITEM_SEQ));
         const candidates = [...new Map(rows.map(r => [r.ITEM_SEQ as string, { name: r.ITEM_NAME as string, itemSeq: r.ITEM_SEQ as string }])).values()];
-        result.drugs.push({ name: drug.name, itemSeq: drug.itemSeq ?? null, identityConfirmed: !!drug.itemSeq && rows.some(r => r.ITEM_SEQ === drug.itemSeq), truncated: page.total > page.rows.length || candidates.length > 20, candidates: candidates.slice(0, 20) });
+        result.drugs.push({ name: drug.name, itemSeq: drug.itemSeq ?? null, identityConfirmed: !!drug.itemSeq && rows.some(r => r.ITEM_SEQ === drug.itemSeq), truncated: !state.complete || candidates.length > 20, candidates: candidates.slice(0, 20) });
         pages.push(rows);
       }
       const warningKeys = new Set<string>();
@@ -163,10 +208,8 @@ export function createHandler(deps: Deps) {
             if (!result.notices!.some(n => n.name === drugs[i]!.name && n.counterpart === counterpart && n.content === reference)) result.notices!.push({ name: drugs[i]!.name, counterpart, content: reference });
           }
           for (let j = 0; j < drugs.length; j++) {
-            if (j === i || !result.drugs[j]!.identityConfirmed || row.MIXTURE_ITEM_SEQ !== drugs[j]!.itemSeq) continue;
-            // An exact pair is required; ingredient-only/free-text matches are unresolved.
-            const content = row.PROHBT_CONTENT;
-            if (typeof content !== 'string' || !content.trim() || content.length > 1500 || /[\u0000-\u001f<>]/u.test(content)) continue;
+            if (j === i || !result.drugs[j]!.identityConfirmed || !matchesCounterpart(row, j)) continue;
+            const content = reasonFor(row);
             const pairKey = JSON.stringify([[drugs[i]!.itemSeq, drugs[j]!.itemSeq].sort(), content]);
             if (result.warnings.length < 100 && !warningKeys.has(pairKey)) {
               warningKeys.add(pairKey); result.warnings.push({ first: drugs[i]!.name, second: drugs[j]!.name, content });
@@ -174,7 +217,37 @@ export function createHandler(deps: Deps) {
           }
         }
       }
-      return reply(result);
+      // Public provider identifiers only, never credentials, URLs or health data.
+      // Keep raw identity evidence out of logs; inspect it in the authenticated
+      // response before changing product-vs-ingredient matching semantics.
+      const ingredientCode = (value: unknown): string | null =>
+        typeof value === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(value) ? value : null;
+      const ingredientCodes = drugs.map((drug, i) => [...new Set(pages[i]!
+        .filter(row => row.ITEM_SEQ === drug.itemSeq)
+        .map(row => ingredientCode(row.INGR_CODE)).filter((code): code is string => code !== null))]);
+      const providerEvidence = drugs.map((drug, i) => {
+        const otherItems = new Set(drugs.filter((_, j) => j !== i).map(other => other.itemSeq));
+        const otherIngredients = new Set(ingredientCodes.filter((_, j) => j !== i).flat());
+        const relevant = pages[i]!.filter(row => row.ITEM_SEQ === drug.itemSeq &&
+          (typeof row.MIXTURE_ITEM_SEQ === 'string' && otherItems.has(row.MIXTURE_ITEM_SEQ) ||
+            otherIngredients.has(ingredientCode(row.MIXTURE_INGR_CODE) ?? '')));
+        return {
+          itemSeq: drug.itemSeq ?? null, retrievedRows: collected[i]!.rows.length,
+          totalCount: collected[i]!.total, complete: collected[i]!.complete,
+          ingredientCodes: ingredientCodes[i], relevantRowCount: relevant.length,
+          rows: relevant.slice(0, 20).map(row => ({
+            ITEM_SEQ: row.ITEM_SEQ, MIXTURE_ITEM_SEQ: row.MIXTURE_ITEM_SEQ ?? null,
+            INGR_CODE: ingredientCode(row.INGR_CODE), MIXTURE_INGR_CODE: ingredientCode(row.MIXTURE_INGR_CODE),
+            DUR_SEQ: ingredientCode(row.DUR_SEQ), MIXTURE_DUR_SEQ: ingredientCode(row.MIXTURE_DUR_SEQ),
+            MIX: ingredientCode(row.MIX), MIXTURE_MIX: ingredientCode(row.MIXTURE_MIX),
+            FORM_CODE: ingredientCode(row.FORM_CODE), MIXTURE_FORM_CODE: ingredientCode(row.MIXTURE_FORM_CODE),
+            reasonPresent: validReason(row.PROHBT_CONTENT),
+            reasonState: validReason(row.PROHBT_CONTENT) ? 'displayable' :
+              row.PROHBT_CONTENT == null || typeof row.PROHBT_CONTENT === 'string' && !row.PROHBT_CONTENT.trim() ? 'empty' : 'not_displayable',
+          })),
+        };
+      });
+      return reply({ ...result, providerEvidence });
     } catch (error) {
       const e = error instanceof Failure ? error : new Failure('UNAVAILABLE');
       return reply({ code: e.code }, e.status);

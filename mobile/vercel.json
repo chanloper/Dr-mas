@@ -3,7 +3,6 @@
   "outputDirectory": "dist",
   "framework": null,
   "cleanUrls": true,
-  "rewrites": [{ "source": "/:path*", "destination": "/" }],
   "headers": [{
     "source": "/:path*",
     "headers": [

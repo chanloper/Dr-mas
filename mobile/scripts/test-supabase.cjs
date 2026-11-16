@@ -1,3 +1,4 @@
+/* global __dirname, Buffer */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -23,15 +24,15 @@ function secureFixture() {
   return { module, data, failWrite: value => { failWrite = value; }, failDelete: value => { failDelete = value; } };
 }
 function fixture(env = { EXPO_PUBLIC_SUPABASE_URL: 'https://project.supabase.invalid', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_only' }, manifest = {}) {
-  let session = null; let profile = { id: 'id-1', display_name: 'User', role: 'patient' }; let signedOut; let appState; let authError = null; let confirm = false; let calls = 0; let refresh = 0; let cleared = false;
+  let session = null; let profile = { id: 'id-1', display_name: 'User', role: 'patient' }; let userMetadata = { role: 'guardian' }; let signedOut; let appState; let authError = null; let confirm = false; let calls = 0; let refresh = 0; let cleared = false;
   const storage = secureFixture();
   const logs = [];
   const diagnostics = load('authDiagnostics.ts', {}, { __DEV__: true, console: { info: (...args) => logs.push(args) } });
   const client = {
     auth: {
-      signUp: async input => { if (authError) return { error: authError }; assert.equal('role' in input.options.data, false); session = confirm ? null : { access_token: 'signed-token' }; return { data: { session }, error: null }; },
+      signUp: async input => { if (authError) return { error: authError }; assert.equal('role' in input.options.data, false); userMetadata = { ...input.options.data }; session = confirm ? null : { access_token: 'signed-token' }; return { data: { session }, error: null }; },
       signInWithPassword: async input => { assert.equal('role' in input, false); if (authError) return { error: authError }; session = { access_token: 'signed-token' }; return { data: { session }, error: null }; },
-      getUser: async () => ({ data: { user: { id: 'id-1', email: 'user@example.invalid', user_metadata: { role: 'guardian' } } }, error: authError }),
+      getUser: async () => ({ data: { user: { id: 'id-1', email: 'user@example.invalid', user_metadata: userMetadata } }, error: authError }),
       getSession: async () => ({ data: { session }, error: authError }),
       signOut: async options => { assert.equal(options.scope, 'local'); if (authError) return { error: authError }; session = null; signedOut?.('SIGNED_OUT'); return { error: null }; },
       onAuthStateChange: callback => { signedOut = callback; return { data: { subscription: { unsubscribe() { signedOut = null; } } } }; },
@@ -52,9 +53,22 @@ function fixture(env = { EXPO_PUBLIC_SUPABASE_URL: 'https://project.supabase.inv
     './secureSessionStorage': storage.module,
     'react-native': { AppState: { currentState: 'active', addEventListener: (_event, callback) => { appState = callback; return { remove() { appState = null; } }; } } },
   });
-  return { auth, supabase, client, diagnostics, logs, calls: () => calls, refresh: () => refresh, cleared: () => cleared, setError: error => { authError = error; }, confirmation: () => { confirm = true; }, setProfile: value => { profile = value; }, state: value => appState(value) };
+  return { auth, supabase, client, diagnostics, logs, calls: () => calls, refresh: () => refresh, cleared: () => cleared, setError: error => { authError = error; }, confirmation: () => { confirm = true; }, setProfile: value => { profile = value; }, setUserMetadata: value => { userMetadata = value; }, state: value => appState(value) };
 }
 const input = { email: 'user@example.invalid', password: 'not-a-real-password', name: 'User', requestedRole: 'patient' };
+
+test('signup preserves the trimmed display name and rejects names the profile trigger would truncate',async()=>{
+ const f=fixture();let payload,calls=0;
+ f.client.auth.signUp=async value=>{calls++;payload=value;return {data:{session:null},error:null};};
+ await f.auth.register({...input,name:'  등록한 이름  '});
+ assert.equal(payload.options.data.display_name,'등록한 이름');
+ assert.deepEqual(Object.keys(payload.options.data),['display_name','signup_role']);assert.equal(payload.options.data.signup_role,'patient');
+ for(const name of ['   ','가'.repeat(101)])await assert.rejects(f.auth.register({...input,name}),e=>e.code==='NAME_INPUT');
+ assert.equal(calls,1);
+ const migration=fs.readFileSync(path.join(__dirname,'../../supabase/migrations/202611010001_auth_and_care.sql'),'utf8');
+ assert.match(migration,/new\.raw_user_meta_data\s*->>\s*'display_name'/);
+ assert.match(migration,/insert into public\.profiles\(id, display_name, role\)/);
+});
 
 test('missing configuration and private keys fail before client construction', async () => {
   for (const env of [{}, { EXPO_PUBLIC_SUPABASE_URL: 'https://project.supabase.invalid', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_secret_not_allowed' }, { EXPO_PUBLIC_SUPABASE_URL: 'http://project.supabase.invalid', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test' }]) {
@@ -90,14 +104,29 @@ test('SDK signup, login, stored session and verified server profile determine au
   const result = await f.auth.register(input); assert.equal(result.accessToken, 'signed-token');
   await f.auth.saveToken(result.accessToken);
   const user = await f.auth.getCurrentUser(result.accessToken); assert.equal(user.role, 'patient');
+  f.setUserMetadata({role:'guardian'}); // legacy manually provisioned account
   f.setProfile({ id: 'id-1', display_name: 'Guardian', role: 'guardian' });
   assert.equal((await f.auth.getCurrentUser()).role, 'guardian');
   assert.equal((await f.auth.login(input)).accessToken, 'signed-token');
 });
-test('email confirmation never yields an authenticated success; guardian signup is blocked', async () => {
+test('patient and guardian confirmation responses never yield an authenticated success', async () => {
   const f = fixture(); f.confirmation();
   const result = await f.auth.register(input); assert.equal(result.requiresEmailConfirmation, true); assert.equal('accessToken' in result, false);
-  await assert.rejects(f.auth.register({ ...input, requestedRole: 'guardian' }), error => error.code === 'ROLE_APPROVAL_REQUIRED');
+  assert.equal((await f.auth.register({ ...input, requestedRole: 'guardian' })).requiresEmailConfirmation,true);
+  await assert.rejects(f.auth.register({...input,requestedRole:'admin'}),error=>error.code==='ROLE_INPUT');
+});
+
+test('guardian signup requests only a public type; server profile is required and mismatch blocks login and restore',async()=>{
+ const f=fixture();let payload;const signup=f.client.auth.signUp;
+ f.client.auth.signUp=async value=>{payload=value;return signup(value);};
+ const session=await f.auth.register({...input,requestedRole:'guardian'});
+ assert.equal(payload.options.data.signup_role,'guardian');assert.equal('role' in payload.options.data,false);
+ await assert.rejects(f.auth.getCurrentUser(session.accessToken),error=>error.code==='ROLE_SETUP_MISMATCH');
+ await assert.rejects(f.auth.getCurrentUser(),error=>error.code==='ROLE_SETUP_MISMATCH');
+ f.setProfile({id:'id-1',display_name:'Guardian',role:'guardian'});
+ assert.equal((await f.auth.getCurrentUser()).role,'guardian');
+ f.setUserMetadata({signup_role:'admin'});await assert.rejects(f.auth.getCurrentUser(),error=>error.code==='ROLE_SETUP_MISMATCH');
+ f.setUserMetadata({role:'patient'});assert.equal((await f.auth.getCurrentUser()).role,'guardian','legacy metadata cannot overwrite a manual server role');
 });
 test('profile absence or unsupported role blocks dashboard authority', async () => {
   const f = fixture();
