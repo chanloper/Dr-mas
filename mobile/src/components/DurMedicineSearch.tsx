@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Linking, Pressable, Switch, Text, View } from 'react-native';
-import { DUR_SOURCE_URL, type DurCandidate, type DurDrug, type DurSearchResult } from '../services/durContract';
+import { MEDICINE_SEARCH_SOURCE_URL, type DurCandidate, type DurDrug, type DurSearchResult } from '../services/durContract';
 import { durConfigured, searchPrescriptionDrugs } from '../services/prescriptionAnalysis';
 import { Action, Chip, Field, StatusMessage, s } from './ui';
 
@@ -48,7 +48,7 @@ export function DurMedicineSearch({ selected, onSelect, disabled = false, automa
   }, [automatic, consent, disabled, query, run]);
   return <View style={{ gap: 10, marginBottom: 18 }}>
     <Text style={s.sectionTitle}>의약품명 검색·선택</Text>
-    <Text style={s.caption}>식약처 병용금기 등록 품목에서 검색합니다. 전체 의약품 목록이 아니며, 검색되지 않아도 안전하다는 의미가 아닙니다.</Text>
+    <Text style={s.caption}>식약처 의약품 허가정보에서 품목을 검색·선택한 뒤 공식 품목코드로 병용금기 정보를 조회합니다. 검색 결과나 병용금기 일치 정보가 없어도 복용 안전을 뜻하지 않습니다.</Text>
     <Field label="검색할 약품명" value={query} onChangeText={change} maxLength={100} editable={!disabled} autoCorrect={false} autoCapitalize="none" placeholder="처방전에 적힌 약품명 (2자 이상)" returnKeyType="search" onSubmitEditing={() => { void run({ query: query.trim(), page: 1 }); }} />
     {selectedList}
     <View style={[s.row, { alignItems: 'center', gap: 10 }]}><Switch value={consent} disabled={disabled} accessibilityLabel="검색 약품명을 서버와 식약처에 전송하는 데 동의" onValueChange={value => { cancel(); setConsent(value); if (!value) { cache.current.clear(); setResult(null); setError(''); } }} /><Text style={[s.caption, { flex: 1 }]}>검색어를 서버·식약처에 전송하는 데 동의합니다.{automatic ? ' 2자 이상 입력하면 0.7초 후 자동 검색합니다.' : ''} 개인정보는 입력하지 마세요.</Text></View>
@@ -58,7 +58,10 @@ export function DurMedicineSearch({ selected, onSelect, disabled = false, automa
     {!!error && <><StatusMessage kind="error">{error}</StatusMessage><Action label="의약품 검색 다시 시도" outline disabled={loading || disabled || !consent} onPress={() => { if (attempt.current) void run(attempt.current); }} /></>}
     {result && <>
       <Text accessibilityLiveRegion="polite" style={s.caption}>검색된 품목 {result.candidates.length}개 · 조회 {new Date(result.checkedAt).toLocaleString()}</Text>
-      {!result.candidates.length && <StatusMessage kind="empty">현재 조회 범위에 일치하는 품목이 없습니다. 정확한 제품명·함량을 확인하거나 다음 페이지를 확인하세요. 약품의 존재나 안전 여부를 판정한 결과가 아닙니다.</StatusMessage>}
+      {!result.candidates.length && <StatusMessage kind="empty">{result.outcome==='incomplete'
+        ?'허가정보 응답이 불완전하여 품목을 확인하지 못했습니다. 검색 결과 없음이나 복용 안전을 의미하지 않습니다.'
+        :result.outcome==='filtered'?'허가정보가 반환됐지만 품목코드·제품명·허가 상태 검증을 통과한 선택 품목이 없습니다.'
+        :'현재 허가정보 조회 범위에 일치하는 품목이 없습니다. 정확한 제품명·함량을 확인하세요. 약품의 존재나 안전 여부를 판정한 결과가 아닙니다.'}</StatusMessage>}
       {result.candidates.map(c => {
         const chosen = selected.some(d => d.itemSeq === c.itemSeq);
         const select = () => { if (chosen || disabled || selected.length >= 6) return; onSelect(c); if (automatic) change(''); };
@@ -70,9 +73,9 @@ export function DurMedicineSearch({ selected, onSelect, disabled = false, automa
           <Text style={s.caption}>{chosen ? '선택됨' : '카드를 눌러 선택'}</Text>
         </Pressable>;
       })}
-      {result.truncated && <Text style={s.caption}>병용금기 등록 행 일부를 조회했습니다. 중복 품목을 묶어 표시하므로 전체 의약품 수와 다릅니다. 최대 3페이지까지 조회합니다.</Text>}
+      {result.truncated && <Text style={s.caption}>허가정보 전체 결과가 아닌 일부 범위입니다. 응답이 불완전하거나 다음 페이지가 남아 있으며, 최대 3페이지까지 조회합니다.</Text>}
       {result.hasMore && <Action label="의약품 검색 결과 더 보기" outline disabled={loading || disabled || !consent || !!error} onPress={() => { void run({ query: result.query, page: result.page + 1 }); }} />}
     </>}
-    {!automatic && <Action label="식약처 DUR 공식 출처 보기 ↗" outline small onPress={() => { void Linking.openURL(DUR_SOURCE_URL).catch(() => setError('공식 출처 페이지를 열지 못했습니다. 인터넷 연결을 확인해 주세요.')); }} />}
+    {!automatic && <Action label="식약처 의약품 허가정보 출처 보기 ↗" outline small onPress={() => { void Linking.openURL(MEDICINE_SEARCH_SOURCE_URL).catch(() => setError('공식 출처 페이지를 열지 못했습니다. 인터넷 연결을 확인해 주세요.')); }} />}
   </View>;
 }

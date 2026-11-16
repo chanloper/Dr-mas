@@ -8,6 +8,8 @@ const messages: Record<string, string> = {
   RATE_LIMITED: '조회 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.',
   LIMITER_UNAVAILABLE: '조회 보호 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
   PROVIDER_REJECTED: '식약처 API에서 조회를 처리하지 못했습니다. 서버 인증·이용 승인을 확인해야 합니다.',
+  PROVIDER_RESPONSE_INVALID: '식약처 응답 형식을 확인하지 못했습니다. 검색 결과 없음으로 판단할 수 없습니다.',
+  UPSTREAM_UNAVAILABLE: '식약처 API 통신이 실패했습니다. 검색 결과 없음으로 판단할 수 없습니다.',
   INVALID_INPUT: '약품명과 품목코드를 확인해 주세요.',
   TIMEOUT: '조회가 취소되었거나 제한 시간을 초과했습니다.',
   ORIGIN_DENIED: '현재 웹 주소에서는 DUR 조회를 이용할 수 없습니다.',

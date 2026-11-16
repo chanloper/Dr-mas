@@ -37,6 +37,11 @@ function endpoint(path: string, key: string, params: Record<string,string>) {
   for(const [name,value]of Object.entries({pageNo:'1',numOfRows:'3',type:'json',...params}))url.searchParams.set(name,value);
   return url;
 }
+// Reuse the same approved service and private key handling for product selection.
+export function approvalSearchRequest(key: string, query: string, page: number): URL {
+  return endpoint('DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnInq08',key,
+    {item_name:query,pageNo:String(page),numOfRows:'100'});
+}
 function sources(easy: Row, approval: Row): MedicineSource[] {
   const id=String(easy.itemSeq),name=text(approval.ITEM_NAME),efficacy=text(approval.EE_DOC_DATA);
   const ingredient=text(approval.MAIN_ITEM_INGR),usage=text(approval.UD_DOC_DATA),precaution=text(approval.NB_DOC_DATA);

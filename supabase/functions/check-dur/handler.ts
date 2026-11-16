@@ -1,8 +1,9 @@
 import { validateDurDrugs, validateDurSearch, type DurResult, type DurSearchInput, type DurCandidate, type DurDrug } from '../_shared/durContract.ts';
 import { LIMIT_SCRIPT } from '../_shared/rateLimit.ts';
-import { headacheOtc } from '../_shared/headacheOtc.ts';
+import { headacheOtc, approvalSearchRequest } from '../_shared/headacheOtc.ts';
 
-type Deps = { env: (key: string) => string | undefined; fetch: typeof fetch };
+type Diagnostic = { providerResultCode: string | null; totalCount: number | null; beforeFilter: number | null; afterFilter: number | null; elapsedMs: number };
+type Deps = { env: (key: string) => string | undefined; fetch: typeof fetch; diagnose?: (value: Diagnostic) => void };
 class Failure extends Error { constructor(public code: string, public status = 503) { super(code); } }
 // Bounded JSON reading shared by request, auth and provider responses. Never log bodies/URLs.
 async function jsonBody(body: Request | Response, max: number, signal: AbortSignal): Promise<unknown> {
@@ -23,18 +24,20 @@ async function jsonBody(body: Request | Response, max: number, signal: AbortSign
   } finally { signal.removeEventListener('abort', stop); reader.releaseLock(); }
 }
 type Row = Record<string, unknown>;
-function readPage(value: unknown): { rows: Row[]; total: number } {
+function readPage(value: unknown, expectedPage: number): { rows: Row[]; total: number } {
   // Accept direct header/body and the standard response envelope; XML/errors fail closed.
   const outer = value as { response?: unknown } | null;
-  const r = (outer?.response ?? value) as { header?: { resultCode?: unknown }; body?: { items?: unknown; totalCount?: unknown } };
+  const r = (outer?.response ?? value) as { header?: { resultCode?: unknown }; body?: { items?: unknown; totalCount?: unknown; pageNo?: unknown; numOfRows?: unknown } };
   if (!r || !['00', '0'].includes(String(r.header?.resultCode))) throw new Failure('PROVIDER_REJECTED', 502);
   if (!['number', 'string'].includes(typeof r.body?.totalCount) || r.body?.totalCount === '') throw new Failure('PROVIDER_RESPONSE_INVALID', 502);
   const total = Number(r.body?.totalCount);
   if (!Number.isSafeInteger(total) || total < 0) throw new Failure('PROVIDER_RESPONSE_INVALID', 502);
+  if(r.body?.pageNo!==undefined&&Number(r.body.pageNo)!==expectedPage)throw new Failure('PROVIDER_RESPONSE_INVALID',502);
   let items = r.body?.items;
   if (items && !Array.isArray(items) && typeof items === 'object' && 'item' in items) items = (items as { item: unknown }).item;
   const rows = items === undefined || items === null || items === '' ? [] : Array.isArray(items) ? items : [items];
-  if (rows.length > 100 || rows.some(x => !x || typeof x !== 'object' || Array.isArray(x)) || rows.length > total || total > 0 && rows.length === 0) throw new Failure('PROVIDER_RESPONSE_INVALID', 502);
+  if(r.body?.numOfRows!==undefined&&(!Number.isInteger(Number(r.body.numOfRows))||Number(r.body.numOfRows)<1||Number(r.body.numOfRows)>100||rows.length>Number(r.body.numOfRows)))throw new Failure('PROVIDER_RESPONSE_INVALID',502);
+  if (rows.length > 100 || rows.some(x => !x || typeof x !== 'object' || Array.isArray(x)) || rows.length > total) throw new Failure('PROVIDER_RESPONSE_INVALID', 502);
   return { rows: (rows as Row[]).map(row => ({ ...row,
     ITEM_SEQ: typeof row.ITEM_SEQ === 'number' && Number.isSafeInteger(row.ITEM_SEQ) ? String(row.ITEM_SEQ) : row.ITEM_SEQ,
     MIXTURE_ITEM_SEQ: typeof row.MIXTURE_ITEM_SEQ === 'number' && Number.isSafeInteger(row.MIXTURE_ITEM_SEQ) ? String(row.MIXTURE_ITEM_SEQ) : row.MIXTURE_ITEM_SEQ,
@@ -49,9 +52,10 @@ function candidatesFrom(rows: Row[], query: string): DurCandidate[] {
   const candidates = new Map<string, DurCandidate>();
   const optional = (v: unknown, max = 300) => typeof v === 'string' && v.trim() && v.length <= max && !/[\u0000-\u001f<>]/u.test(v) ? v.trim() : null;
   for (const row of rows) {
-    if (typeof row.ITEM_NAME !== 'string' || !row.ITEM_NAME.includes(query) || typeof row.ITEM_SEQ !== 'string') continue;
+    if (typeof row.ITEM_NAME !== 'string' || !row.ITEM_NAME.includes(query) || typeof row.ITEM_SEQ !== 'string'
+      || row.CANCEL_NAME !== '정상' || row.CANCEL_DATE != null && row.CANCEL_DATE !== '') continue;
     try { validateDurDrugs([{ name: row.ITEM_NAME, itemSeq: row.ITEM_SEQ }]); } catch { continue; }
-    if (!candidates.has(row.ITEM_SEQ)) candidates.set(row.ITEM_SEQ, { name: row.ITEM_NAME, itemSeq: row.ITEM_SEQ, manufacturer: optional(row.ENTP_NAME), ingredient: optional(row.MAIN_INGR ?? row.INGR_KOR_NAME) });
+    if (!candidates.has(row.ITEM_SEQ)) candidates.set(row.ITEM_SEQ, { name: row.ITEM_NAME, itemSeq: row.ITEM_SEQ, manufacturer: optional(row.ENTP_NAME), ingredient: optional(row.ITEM_INGR_NAME) });
   }
   return [...candidates.values()];
 }
@@ -84,7 +88,8 @@ export function createHandler(deps: Deps) {
     const fetchJson = async (url: string | URL, init: RequestInit, max = 524288) => {
       const response = await bounded(deps.fetch(url, { ...init, signal: controller.signal, redirect: 'error' }));
       if (!response.ok) throw new Failure('UPSTREAM_UNAVAILABLE', 502);
-      return bounded(jsonBody(response, max, controller.signal));
+      try{return await bounded(jsonBody(response, max, controller.signal));}
+      catch(error){if(error instanceof Failure)throw error;throw new Failure('PROVIDER_RESPONSE_INVALID',502);}
     };
     try {
       if (deps.env('DUR_ENABLED') !== 'true') throw new Failure('NOT_CONFIGURED');
@@ -122,6 +127,7 @@ export function createHandler(deps: Deps) {
         else {
           if (!body || Object.keys(body).some(k => k !== 'drugs')) throw Error();
           drugs = validateDurDrugs(body.drugs);
+          if(drugs.some(drug=>!drug.itemSeq))throw Error();
         }
       } catch { throw new Failure('INVALID_INPUT', 400); }
       const secret = deps.env('MFDS_DUR_SERVICE_KEY')?.trim(); if (!secret) throw new Failure('NOT_CONFIGURED');
@@ -149,7 +155,7 @@ export function createHandler(deps: Deps) {
         return reply(result);
       }
       const result: DurResult = { status: 'reference_only', drugs: [], warnings: [], notices: [], checkedAt: new Date().toISOString() };
-      const collected = drugs.map(() => ({ rows: [] as Row[], total: null as number | null, complete: false }));
+      const collected = drugs.map(() => ({ rows: [] as Row[], total: null as number | null, complete: false, fingerprints: new Set<string>() }));
       const validReason = (v: unknown): v is string => typeof v === 'string' && !!v.trim() && v.length <= 1500 && !/[\u0000-\u001f<>]/u.test(v);
       const identifier = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(value);
       const reasonFor = (row: Row): string => validReason(row.PROHBT_CONTENT) ? row.PROHBT_CONTENT :
@@ -162,13 +168,13 @@ export function createHandler(deps: Deps) {
         // code and formulation to occur on the other selected product itself.
         // Never split composite codes or infer missing formulation information.
         return identifier(row.MIXTURE_INGR_CODE) && identifier(row.MIXTURE_FORM_CODE) &&
-          collected[index]!.rows.some(other => other.ITEM_SEQ === drugs[index]!.itemSeq && other.ITEM_NAME === drugs[index]!.name &&
+          collected[index]!.rows.some(other => other.ITEM_SEQ === drugs[index]!.itemSeq &&
             other.INGR_CODE === row.MIXTURE_INGR_CODE && other.FORM_CODE === row.MIXTURE_FORM_CODE);
       };
-      const identified = (index: number) => !!drugs[index]!.itemSeq && collected[index]!.rows.some(r => r.ITEM_SEQ === drugs[index]!.itemSeq && r.ITEM_NAME === drugs[index]!.name);
+      const identified = (index: number) => !!drugs[index]!.itemSeq && collected[index]!.rows.some(r => r.ITEM_SEQ === drugs[index]!.itemSeq);
       const allPairsFound = () => drugs.length >= 2 && drugs.every((_, i) => identified(i)) && drugs.every((first, i) => drugs.every((second, j) => j <= i ||
-        collected[i]!.rows.some(r => r.ITEM_SEQ === first.itemSeq && r.ITEM_NAME === first.name && matchesCounterpart(r, j)) ||
-        collected[j]!.rows.some(r => r.ITEM_SEQ === second.itemSeq && r.ITEM_NAME === second.name && matchesCounterpart(r, i))));
+        collected[i]!.rows.some(r => r.ITEM_SEQ === first.itemSeq && matchesCounterpart(r, j)) ||
+        collected[j]!.rows.some(r => r.ITEM_SEQ === second.itemSeq && matchesCounterpart(r, i))));
       // Read page one of every selected product before spending the budget on
       // page two. Never infer a pair from product/ingredient name similarity.
       try {
@@ -184,26 +190,56 @@ export function createHandler(deps: Deps) {
           if (!admission || admission.error || admission.result !== 0 && admission.result !== 1) throw Error();
         } catch (error) { if (error instanceof Failure && error.code === 'TIMEOUT') throw error; throw new Failure('LIMITER_UNAVAILABLE'); }
         if (admission.result === 0) { headers['Retry-After'] = '60'; throw new Failure('RATE_LIMITED', 429); }
-        const url = new URL('https://apis.data.go.kr/1471000/DURPrdlstInfoService03/getUsjntTabooInfoList03');
         // Portal may supply an encoded key. Decode exactly once before URLSearchParams.
         let rawKey: string; try { rawKey = decodeURIComponent(secret); } catch { throw new Failure('NOT_CONFIGURED'); }
-        url.searchParams.set('serviceKey', rawKey); url.searchParams.set('type', 'json');
-        url.searchParams.set('pageNo', String(pageNo)); url.searchParams.set('numOfRows', '100');
-        url.searchParams.set('itemName', drug.name);
-        if (!search && drug.itemSeq) url.searchParams.set('itemSeq', drug.itemSeq);
-        const page = readPage(await fetchJson(url, {}));
+        const url = search ? approvalSearchRequest(rawKey,search.query,search.page)
+          : new URL('https://apis.data.go.kr/1471000/DURPrdlstInfoService03/getUsjntTabooInfoList03');
+        if(!search){
+          url.searchParams.set('serviceKey', rawKey); url.searchParams.set('type', 'json');
+          url.searchParams.set('pageNo', String(pageNo)); url.searchParams.set('numOfRows', '100');
+          url.searchParams.set('itemSeq', drug.itemSeq!);
+        }
+        const started=Date.now();
+        const diagnostic:Diagnostic={providerResultCode:null,totalCount:null,beforeFilter:null,afterFilter:null,elapsedMs:0};
+        try {
+        const value=await fetchJson(url, {});
+        const outer=value as {response?:unknown};
+        const provider=(outer?.response??value) as {header?:{resultCode?:unknown};body?:{totalCount?:unknown}};
+        const code=String(provider?.header?.resultCode??'');
+        diagnostic.providerResultCode=/^\d{1,2}$/.test(code)?code:null;
+        const total=provider?.body?.totalCount;
+        if((typeof total==='number'||typeof total==='string'&&total.trim()!=='')&&Number.isSafeInteger(Number(total))&&Number(total)>=0)diagnostic.totalCount=Number(total);
+        const page = readPage(value,pageNo);
+        diagnostic.beforeFilter=page.rows.length;
         if (search) {
+          const candidates=candidatesFrom(page.rows,search.query);
+          diagnostic.afterFilter=candidates.length;
+          const incomplete=page.rows.length<Math.min(100,Math.max(0,page.total-(search.page-1)*100));
           const remaining = page.total > search.page * 100;
-          return reply({ status: 'reference_only', query: search.query, page: search.page, candidates: candidatesFrom(page.rows, search.query), hasMore: remaining && search.page < 3, truncated: remaining, checkedAt: result.checkedAt });
+          return reply({ status: 'reference_only', query: search.query, page: search.page, candidates,
+            outcome:incomplete?'incomplete':page.total===0?'empty':candidates.length?'matched':'filtered',
+            hasMore: remaining && search.page < 3, truncated: remaining||incomplete, checkedAt: result.checkedAt });
+        }
+        for(const row of page.rows){
+          if(row.ITEM_SEQ!==drug.itemSeq)throw new Failure('PROVIDER_RESPONSE_INVALID',502);
+          try{validateDurDrugs([{name:row.ITEM_NAME,itemSeq:row.ITEM_SEQ}]);}catch{throw new Failure('PROVIDER_RESPONSE_INVALID',502);}
         }
         if (state.total === null) state.total = page.total;
         else if (state.total !== page.total) throw new Failure('PROVIDER_RESPONSE_INVALID', 502);
+        const fingerprint=JSON.stringify(page.rows);
+        if(page.rows.length&&state.fingerprints.has(fingerprint)){diagnostic.afterFilter=0;break pagination;}
+        state.fingerprints.add(fingerprint);
+        diagnostic.afterFilter=page.rows.length;
         state.rows.push(...page.rows);
         state.complete = state.rows.length >= state.total;
         // A short page with an outstanding total is an incomplete result, not
         // permission to declare the remaining combinations safe.
         if (!state.complete && page.rows.length < 100) break pagination;
         if (allPairsFound() || collected.every(s => s.complete)) break pagination;
+        } finally {
+          diagnostic.elapsedMs=Math.max(0,Date.now()-started);
+          try{(deps.diagnose??(value=>console.info(JSON.stringify(value))))(diagnostic);}catch{/* Diagnostics cannot affect verification. */}
+        }
       }
       }
       } catch (error) {
@@ -214,7 +250,7 @@ export function createHandler(deps: Deps) {
       const pages: Row[][] = [];
       for (let index = 0; index < drugs.length; index++) {
         const drug = drugs[index]!, state = collected[index]!;
-        const rows = state.rows.filter(r => r.ITEM_NAME === drug.name && typeof r.ITEM_SEQ === 'string' && /^\d{9}$/.test(r.ITEM_SEQ));
+        const rows = state.rows.filter(r => r.ITEM_SEQ === drug.itemSeq && typeof r.ITEM_SEQ === 'string' && /^\d{9}$/.test(r.ITEM_SEQ));
         const candidates = [...new Map(rows.map(r => [r.ITEM_SEQ as string, { name: r.ITEM_NAME as string, itemSeq: r.ITEM_SEQ as string }])).values()];
         result.drugs.push({ name: drug.name, itemSeq: drug.itemSeq ?? null, identityConfirmed: !!drug.itemSeq && rows.some(r => r.ITEM_SEQ === drug.itemSeq), truncated: !state.complete || candidates.length > 20, candidates: candidates.slice(0, 20) });
         pages.push(rows);
@@ -269,7 +305,8 @@ export function createHandler(deps: Deps) {
           })),
         };
       });
-      return reply({ ...result, providerEvidence });
+      return reply({ ...result, providerEvidence, incomplete:collected.some(state=>!state.complete),
+        comparisonStatus:result.warnings.length?'matched':result.drugs.every(drug=>drug.identityConfirmed&&!drug.truncated)?'no_registered_match':'unverified' });
     } catch (error) {
       const e = error instanceof Failure ? error : new Failure('UNAVAILABLE');
       return reply({ code: e.code }, e.status);
